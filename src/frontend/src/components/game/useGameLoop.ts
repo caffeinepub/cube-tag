@@ -66,12 +66,22 @@ export interface GameLoopRefs {
   obstaclesRef: React.MutableRefObject<ObstacleBox[]>;
 }
 
+// ── Flee/patrol radius constants ─────────────────────────────────────────────
+const FLEE_RADIUS_3D = 8; // non-IT bots start fleeing when IT is this close
+const FLEE_RADIUS_2D = 10; // same for 2D horizontal distance
+const PATROL_SPEED_FACTOR = 0.55; // non-IT bots patrol at 55% of normal speed
+
 // ── Per-bot persistent state maps ────────────────────────────────────────────
 const botJumpTimers: Record<string, number> = {};
 const botStuckTimers: Record<string, number> = {};
 const botLastPos: Record<string, Vec3> = {};
 const botRandomDirTimers: Record<string, number> = {};
 const botRandomDirs: Record<string, { dx: number; dz: number }> = {};
+
+// Patrol waypoints for 3D non-IT bots
+const botPatrolTarget: Record<string, Vec3> = {};
+// Patrol direction for 2D non-IT bots (-1 = left, 1 = right)
+const botPatrolDir: Record<string, number> = {};
 
 // Smart AI state: which target each bot is chasing and for how long
 const botTargetId: Record<string, string | null> = {};
@@ -265,7 +275,27 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
                     : -1;
               }
             } else if (itPlayer) {
-              moveX = player.position.x > itPlayer.position.x ? 1 : -1;
+              // Flee/patrol based on horizontal distance to IT
+              const horizDistToIT = Math.abs(
+                player.position.x - itPlayer.position.x,
+              );
+              if (horizDistToIT < FLEE_RADIUS_2D) {
+                // Within flee radius — run away from IT
+                moveX = player.position.x > itPlayer.position.x ? 1 : -1;
+              } else {
+                // Outside flee radius — patrol left/right
+                if (!botPatrolDir[player.id]) {
+                  botPatrolDir[player.id] = Math.random() < 0.5 ? -1 : 1;
+                }
+                // Reverse direction at map bounds or if stuck near edge
+                if (
+                  player.position.x >= MAP_BOUND - 1 ||
+                  player.position.x <= -MAP_BOUND + 1
+                ) {
+                  botPatrolDir[player.id] = -botPatrolDir[player.id];
+                }
+                moveX = botPatrolDir[player.id];
+              }
             }
 
             if (!botJumpTimers[player.id]) {
@@ -493,17 +523,51 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             isChasing = true;
           }
         } else {
-          // Flee from IT
+          // Non-IT: patrol when IT is far, flee when IT is close
           if (!itPlayer) {
             return { ...player, tagImmunityTimer: newImmunity };
           }
-          targetPos = itPlayer.position;
-          isChasing = false;
 
           // Clear stored chase target when not IT
           botTargetId[player.id] = null;
           botTargetTimer[player.id] = 0;
+
+          const distToIT = distance(player.position, itPlayer.position);
+
+          if (distToIT < FLEE_RADIUS_3D) {
+            // Within flee radius — run away from IT at full speed
+            targetPos = itPlayer.position;
+            isChasing = false;
+            // Clear patrol target so it picks a fresh one after fleeing
+            delete botPatrolTarget[player.id];
+          } else {
+            // Outside flee radius — patrol/wander around the map
+            isChasing = true; // move TOWARD waypoint
+
+            // Pick or refresh patrol waypoint
+            const patrol = botPatrolTarget[player.id];
+            const arrivedAtPatrol =
+              patrol && distance(player.position, patrol) < 1.5;
+
+            if (!patrol || arrivedAtPatrol) {
+              botPatrolTarget[player.id] = {
+                x: (Math.random() - 0.5) * 36, // -18 to 18
+                y: 0.5,
+                z: (Math.random() - 0.5) * 36, // -18 to 18
+              };
+            }
+
+            targetPos = botPatrolTarget[player.id];
+            // Patrol at reduced speed — override actual speed below
+            // We'll use a flag via a special "patrol mode" speed adjustment
+          }
         }
+
+        // Adjust speed for patrol mode (non-IT bots outside flee radius patrol slower)
+        const effectiveSpeed =
+          !player.isIT && isChasing && botPatrolTarget[player.id]
+            ? BOT_NORMAL_SPEED * PATROL_SPEED_FACTOR
+            : speed;
 
         // ── Stuck detection ─────────────────────────────────────────────────
         const lastPos = botLastPos[player.id];
@@ -526,12 +590,12 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           botRandomDirTimers[player.id] -= delta;
           const rd = botRandomDirs[player.id] ?? { dx: 1, dz: 0 };
           const nx = clamp(
-            player.position.x + rd.dx * speed * delta,
+            player.position.x + rd.dx * effectiveSpeed * delta,
             -MAP_BOUND,
             MAP_BOUND,
           );
           const nz = clamp(
-            player.position.z + rd.dz * speed * delta,
+            player.position.z + rd.dz * effectiveSpeed * delta,
             -MAP_BOUND,
             MAP_BOUND,
           );
@@ -563,19 +627,19 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
         const bestDir = findBestBotDirection(
           player.position,
           targetPos,
-          speed,
+          effectiveSpeed,
           delta,
           obstacles,
           isChasing,
         );
 
         const nx = clamp(
-          player.position.x + bestDir.dx * speed * delta,
+          player.position.x + bestDir.dx * effectiveSpeed * delta,
           -MAP_BOUND,
           MAP_BOUND,
         );
         const nz = clamp(
-          player.position.z + bestDir.dz * speed * delta,
+          player.position.z + bestDir.dz * effectiveSpeed * delta,
           -MAP_BOUND,
           MAP_BOUND,
         );

@@ -69,6 +69,9 @@ export default function App() {
   const [winners, setWinners] = useState<string[]>([]);
   const [finalPlayers, setFinalPlayers] = useState<PlayerState[]>([]);
   const [mapType, setMapType] = useState<"3d" | "2d-platformer">("3d");
+  const [selectedMapType, setSelectedMapType] = useState<
+    "3d" | "2d-platformer" | "random"
+  >("random");
   const [controlMode, setControlMode] = useState<"pc" | "mobile">("pc");
   const [gameDuration, setGameDuration] = useState(100);
 
@@ -101,8 +104,12 @@ export default function App() {
 
   const handleStartGame = useCallback(() => {
     const seed = Math.floor(Math.random() * 999999);
-    const type: "3d" | "2d-platformer" =
-      Math.random() < 0.3 ? "2d-platformer" : "3d";
+    let type: "3d" | "2d-platformer";
+    if (selectedMapType === "random") {
+      type = Math.random() < 0.3 ? "2d-platformer" : "3d";
+    } else {
+      type = selectedMapType;
+    }
     setMapType(type);
 
     const newObstacles =
@@ -126,7 +133,7 @@ export default function App() {
     setObstacles(newObstacles);
     setGamePlayers(playersWithIT);
     setScreen("game");
-  }, [lobbyPlayers]);
+  }, [lobbyPlayers, selectedMapType]);
 
   const handleGameEnd = useCallback(
     (players: PlayerState[], gameWinners: string[]) => {
@@ -183,6 +190,8 @@ export default function App() {
           mapType={mapType}
           gameDuration={gameDuration}
           onDurationChange={setGameDuration}
+          selectedMapType={selectedMapType}
+          onMapTypeChange={setSelectedMapType}
         />
       )}
       {screen === "game" && gamePlayers.length > 0 && (

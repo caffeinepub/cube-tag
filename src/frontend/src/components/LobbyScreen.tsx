@@ -13,7 +13,18 @@ interface LobbyScreenProps {
   mapType?: "3d" | "2d-platformer";
   gameDuration?: number;
   onDurationChange?: (d: number) => void;
+  selectedMapType?: "3d" | "2d-platformer" | "random";
+  onMapTypeChange?: (t: "3d" | "2d-platformer" | "random") => void;
 }
+
+const MAP_TYPE_OPTIONS: {
+  value: "3d" | "2d-platformer" | "random";
+  label: string;
+}[] = [
+  { value: "3d", label: "3D ARENA" },
+  { value: "2d-platformer", label: "2D JUMP" },
+  { value: "random", label: "RANDOM" },
+];
 
 export function LobbyScreen({
   roomCode,
@@ -22,16 +33,17 @@ export function LobbyScreen({
   onStartGame,
   onLeave,
   onKickPlayer,
-  mapType,
   gameDuration = 100,
   onDurationChange,
+  selectedMapType = "random",
+  onMapTypeChange,
 }: LobbyScreenProps) {
   const mapLabel =
-    mapType === "2d-platformer"
+    selectedMapType === "2d-platformer"
       ? "2D JUMP"
-      : mapType === "3d"
+      : selectedMapType === "3d"
         ? "3D ARENA"
-        : "Random";
+        : "RANDOM";
 
   return (
     <div className="relative min-h-screen w-full bg-game-deep overflow-hidden flex items-center justify-center scanlines">
@@ -191,6 +203,62 @@ export function LobbyScreen({
             </p>
           </motion.div>
         )}
+
+        {/* Map type selector — host interactive, non-host read-only */}
+        <motion.div
+          className="game-panel rounded-2xl p-4 mb-5"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+        >
+          <p className="text-xs tracking-widest uppercase text-muted-foreground mb-3">
+            Map Type
+          </p>
+          {isHost && onMapTypeChange ? (
+            <div className="grid grid-cols-3 gap-2">
+              {MAP_TYPE_OPTIONS.map((opt) => {
+                const isActive = selectedMapType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className="h-10 rounded-lg text-xs font-black tracking-wider transition-all active:scale-95"
+                    style={
+                      isActive
+                        ? {
+                            background: "oklch(0.82 0.18 195)",
+                            color: "oklch(0.1 0.02 260)",
+                            border: "1px solid oklch(0.82 0.18 195)",
+                            boxShadow: "0 0 12px oklch(0.82 0.18 195 / 0.5)",
+                          }
+                        : {
+                            background: "oklch(0.15 0.03 260 / 0.8)",
+                            color: "oklch(0.65 0.08 220)",
+                            border: "1px solid oklch(0.82 0.18 195 / 0.25)",
+                          }
+                    }
+                    onClick={() => onMapTypeChange(opt.value)}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <span
+                className="px-4 py-1.5 rounded-full text-sm font-bold tracking-wide"
+                style={{
+                  background: "oklch(0.82 0.18 195 / 0.15)",
+                  border: "1px solid oklch(0.82 0.18 195 / 0.4)",
+                  color: "oklch(0.82 0.18 195)",
+                }}
+              >
+                {mapLabel}
+              </span>
+            </div>
+          )}
+        </motion.div>
 
         {/* Game info */}
         <motion.div
