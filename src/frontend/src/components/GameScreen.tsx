@@ -14,10 +14,10 @@ import { useGameLoopLogic } from "./game/useGameLoop";
 
 // Bot photo thumbnails for scoreboard HUD
 const BOT_PHOTO_MAP: Record<string, string> = {
-  "bot-0": "/assets/uploads/IMG_0965-1.jpeg",
-  "bot-1": "/assets/uploads/IMG_0963-2.jpeg",
-  "bot-2": "/assets/uploads/IMG_0964-3.jpeg",
-  "bot-3": "/assets/uploads/IMG_0451-4.jpeg",
+  "bot-0": "/assets/uploads/IMG_0963-1-1.jpeg",
+  "bot-1": "/assets/uploads/IMG_0964-1-2.jpeg",
+  "bot-2": "/assets/uploads/IMG_0929-3.png",
+  "bot-3": "/assets/uploads/IMG_0471-4.png",
 };
 
 // ─── Mobile D-pad Controls ────────────────────────────────────────────────────

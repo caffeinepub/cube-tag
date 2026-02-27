@@ -8,10 +8,135 @@ import { ObstacleCubes } from "./ObstacleCubes";
 
 // Bot face image paths — matches the uploaded photos
 const BOT_FACE_TEXTURES = [
-  "/assets/uploads/IMG_0965-1.jpeg", // Bot Alpha: chubby fries guy
-  "/assets/uploads/IMG_0963-2.jpeg", // Bot Beta: muscular statue
-  "/assets/uploads/IMG_0964-3.jpeg", // Bot Gamma: monkey
-  "/assets/uploads/IMG_0451-4.jpeg", // Bot 3: kid
+  "/assets/uploads/IMG_0963-1-1.jpeg", // Bot Alpha: muscle statue
+  "/assets/uploads/IMG_0964-1-2.jpeg", // Bot Beta: monkey
+  "/assets/uploads/IMG_0929-3.png", // Bot Gamma: kid in blanket
+  "/assets/uploads/IMG_0471-4.png", // Bot Delta: teen on train
+];
+
+// Wanted poster photo paths (cycling through the 4 characters)
+const WANTED_POSTER_PHOTO_PATHS = [
+  "/assets/uploads/IMG_0963-1-1.jpeg",
+  "/assets/uploads/IMG_0964-1-2.jpeg",
+  "/assets/uploads/IMG_0929-3.png",
+  "/assets/uploads/IMG_0471-4.png",
+];
+
+// Static floor ring decal positions (generated once, not per-frame)
+const FLOOR_RING_DECALS: {
+  id: string;
+  pos: [number, number, number];
+  radius: number;
+  color: string;
+}[] = [
+  { id: "ring-0", pos: [-8, 0.02, -8], radius: 2.5, color: "#00ffcc" },
+  { id: "ring-1", pos: [8, 0.02, 8], radius: 1.8, color: "#ff0088" },
+  { id: "ring-2", pos: [-15, 0.02, 5], radius: 2.2, color: "#8800ff" },
+  { id: "ring-3", pos: [10, 0.02, -12], radius: 1.5, color: "#00ccff" },
+  { id: "ring-4", pos: [5, 0.02, 15], radius: 2.0, color: "#ff4400" },
+  { id: "ring-5", pos: [-10, 0.02, -3], radius: 1.2, color: "#4400ff" },
+  { id: "ring-6", pos: [18, 0.02, -6], radius: 1.8, color: "#ffcc00" },
+  { id: "ring-7", pos: [-5, 0.02, 18], radius: 2.0, color: "#aa00ff" },
+];
+
+// Static neon tube light positions
+const NEON_TUBES: {
+  id: string;
+  pos: [number, number, number];
+  color: string;
+  rotY: number;
+}[] = [
+  { id: "tube-0", pos: [-12, 4.5, -10], color: "#00ffcc", rotY: 0.4 },
+  { id: "tube-1", pos: [12, 4.5, 8], color: "#ff0088", rotY: -0.6 },
+  { id: "tube-2", pos: [-6, 4.5, 14], color: "#8800ff", rotY: 1.1 },
+  { id: "tube-3", pos: [8, 4.5, -16], color: "#00aaff", rotY: 0.2 },
+];
+
+// Static decorative crates
+const DECO_CRATES: {
+  id: string;
+  pos: [number, number, number];
+  size: number;
+  rotY: number;
+}[] = [
+  { id: "crate-0", pos: [-18, 0.5, -3], size: 1.0, rotY: 0.3 },
+  { id: "crate-1", pos: [17, 0.5, -9], size: 0.8, rotY: 0.8 },
+  { id: "crate-2", pos: [-9, 0.5, 17], size: 1.0, rotY: -0.5 },
+  { id: "crate-3", pos: [14, 0.5, 14], size: 0.8, rotY: 1.2 },
+  { id: "crate-4", pos: [-17, 0.5, 10], size: 1.0, rotY: -0.2 },
+  { id: "crate-5", pos: [3, 0.5, -18], size: 0.8, rotY: 0.6 },
+];
+
+// Wanted poster positions in 3D arena
+const POSTER_POSITIONS_3D: {
+  id: string;
+  pos: [number, number, number];
+  rotY: number;
+  photoIdx: number;
+}[] = [
+  {
+    id: "wp-0",
+    pos: [-20, 1.8, -8] as [number, number, number],
+    rotY: Math.PI / 2,
+    photoIdx: 0,
+  },
+  {
+    id: "wp-1",
+    pos: [20, 1.8, 5] as [number, number, number],
+    rotY: -Math.PI / 2,
+    photoIdx: 1,
+  },
+  {
+    id: "wp-2",
+    pos: [8, 1.8, -20] as [number, number, number],
+    rotY: 0,
+    photoIdx: 2,
+  },
+  {
+    id: "wp-3",
+    pos: [-5, 1.8, 20] as [number, number, number],
+    rotY: Math.PI,
+    photoIdx: 3,
+  },
+  {
+    id: "wp-4",
+    pos: [-12, 1.8, 3] as [number, number, number],
+    rotY: Math.PI / 4,
+    photoIdx: 0,
+  },
+  {
+    id: "wp-5",
+    pos: [10, 1.8, -10] as [number, number, number],
+    rotY: -Math.PI / 3,
+    photoIdx: 2,
+  },
+];
+
+// Wanted poster positions in 2D platformer (background layer)
+const POSTER_POSITIONS_2D: {
+  id: string;
+  pos: [number, number, number];
+  rotY: number;
+  photoIdx: number;
+}[] = [
+  {
+    id: "wp2d-0",
+    pos: [-10, 4, -3] as [number, number, number],
+    rotY: 0,
+    photoIdx: 1,
+  },
+  {
+    id: "wp2d-1",
+    pos: [5, 6, -3] as [number, number, number],
+    rotY: 0,
+    photoIdx: 3,
+  },
+  {
+    id: "wp2d-2",
+    pos: [-2, 2, -3] as [number, number, number],
+    rotY: 0,
+    photoIdx: 0,
+  },
 ];
 
 // Static starfield positions (generated once)
@@ -64,6 +189,137 @@ class ThreeErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+// ─── Wanted Poster ────────────────────────────────────────────────────────────
+
+interface WantedPosterProps {
+  position: [number, number, number];
+  rotationY: number;
+  photoIndex: number;
+}
+
+function WantedPosterInner({
+  position,
+  rotationY,
+  photoIndex,
+}: WantedPosterProps) {
+  const photoPath =
+    WANTED_POSTER_PHOTO_PATHS[photoIndex % WANTED_POSTER_PHOTO_PATHS.length];
+  const texture = useLoader(TextureLoader, photoPath);
+
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      {/* Outer dark brown border frame */}
+      <mesh position={[0, 0, -0.02]}>
+        <planeGeometry args={[1.4, 2.0]} />
+        <meshStandardMaterial color="#3d1f00" roughness={0.9} metalness={0.1} />
+      </mesh>
+
+      {/* Parchment background */}
+      <mesh position={[0, 0, -0.01]}>
+        <planeGeometry args={[1.28, 1.88]} />
+        <meshStandardMaterial
+          color="#c9a14a"
+          roughness={0.95}
+          metalness={0.0}
+        />
+      </mesh>
+
+      {/* "DEAD OR ALIVE" header text */}
+      <Text
+        position={[0, 0.72, 0.01]}
+        fontSize={0.18}
+        color="#8b0000"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.01}
+        outlineColor="#3d0000"
+        maxWidth={1.1}
+      >
+        DEAD OR ALIVE
+      </Text>
+
+      {/* Decorative line under header */}
+      <mesh position={[0, 0.56, 0.01]}>
+        <planeGeometry args={[1.1, 0.025]} />
+        <meshBasicMaterial color="#8b0000" />
+      </mesh>
+
+      {/* Photo */}
+      <mesh position={[0, -0.02, 0.01]}>
+        <planeGeometry args={[1.0, 1.0]} />
+        <meshStandardMaterial map={texture} roughness={0.6} />
+      </mesh>
+
+      {/* Decorative line above reward */}
+      <mesh position={[0, -0.56, 0.01]}>
+        <planeGeometry args={[1.1, 0.025]} />
+        <meshBasicMaterial color="#8b6914" />
+      </mesh>
+
+      {/* "REWARD $5,000" text */}
+      <Text
+        position={[0, -0.73, 0.01]}
+        fontSize={0.14}
+        color="#c8960c"
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.01}
+        outlineColor="#5a3e00"
+        maxWidth={1.1}
+      >
+        REWARD: $5,000
+      </Text>
+
+      {/* Subtle point light to illuminate poster */}
+      <pointLight
+        position={[0, 0, 0.5]}
+        color="#ffe8a0"
+        intensity={1.2}
+        distance={3}
+        decay={2}
+      />
+    </group>
+  );
+}
+
+function WantedPosterFallback({
+  position,
+  rotationY,
+}: Omit<WantedPosterProps, "photoIndex">) {
+  return (
+    <group position={position} rotation={[0, rotationY, 0]}>
+      <mesh>
+        <planeGeometry args={[1.2, 1.8]} />
+        <meshStandardMaterial color="#8B6914" roughness={0.95} />
+      </mesh>
+    </group>
+  );
+}
+
+function WantedPoster({ position, rotationY, photoIndex }: WantedPosterProps) {
+  return (
+    <ThreeErrorBoundary
+      fallback={
+        <WantedPosterFallback position={position} rotationY={rotationY} />
+      }
+    >
+      <Suspense
+        fallback={
+          <WantedPosterFallback position={position} rotationY={rotationY} />
+        }
+      >
+        <WantedPosterInner
+          position={position}
+          rotationY={rotationY}
+          photoIndex={photoIndex}
+        />
+      </Suspense>
+    </ThreeErrorBoundary>
+  );
+}
+
+// ─── Bot Characters ───────────────────────────────────────────────────────────
 
 interface BotCharacterProps {
   player: PlayerState;
@@ -406,6 +662,16 @@ export function Scene({
 
         <ObstacleCubes obstacles={obstacles} />
 
+        {/* Wanted Posters in background */}
+        {POSTER_POSITIONS_2D.map((p) => (
+          <WantedPoster
+            key={p.id}
+            position={p.pos}
+            rotationY={p.rotY}
+            photoIndex={p.photoIdx}
+          />
+        ))}
+
         {/* Only render non-local players (first-person: no body for local player) */}
         {players
           .filter((p) => !p.isLocal)
@@ -558,6 +824,61 @@ export function Scene({
 
       {/* Obstacles */}
       <ObstacleCubes obstacles={obstacles} />
+
+      {/* Wanted Posters */}
+      {POSTER_POSITIONS_3D.map((p) => (
+        <WantedPoster
+          key={p.id}
+          position={p.pos}
+          rotationY={p.rotY}
+          photoIndex={p.photoIdx}
+        />
+      ))}
+
+      {/* Floor ring decals */}
+      {FLOOR_RING_DECALS.map((ring) => (
+        <mesh key={ring.id} position={ring.pos} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[ring.radius * 0.7, ring.radius, 48]} />
+          <meshBasicMaterial color={ring.color} transparent opacity={0.35} />
+        </mesh>
+      ))}
+
+      {/* Neon tube lights */}
+      {NEON_TUBES.map((tube) => (
+        <group key={tube.id} position={tube.pos} rotation={[0, tube.rotY, 0]}>
+          <mesh>
+            <boxGeometry args={[0.1, 0.15, 6]} />
+            <meshStandardMaterial
+              color={tube.color}
+              emissive={tube.color}
+              emissiveIntensity={2.5}
+              roughness={0.2}
+              metalness={0.8}
+            />
+          </mesh>
+          <pointLight color={tube.color} intensity={4} distance={8} decay={2} />
+        </group>
+      ))}
+
+      {/* Decorative crates */}
+      {DECO_CRATES.map((crate) => (
+        <mesh
+          key={crate.id}
+          position={crate.pos}
+          rotation={[0, crate.rotY, 0]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[crate.size, crate.size, crate.size]} />
+          <meshStandardMaterial
+            color="#1a1010"
+            roughness={0.4}
+            metalness={0.75}
+            emissive="#220a00"
+            emissiveIntensity={0.2}
+          />
+        </mesh>
+      ))}
 
       {/* Bot characters (NOT local player — first-person) */}
       {players

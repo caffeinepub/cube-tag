@@ -1,34 +1,39 @@
 # Cube Tag
 
 ## Current State
-- Map type is randomly selected each game (30% 2D platformer, 70% 3D arena) — player has no control
-- Non-IT bots flee from IT in 3D mode but do it passively — they just move away
-- In 2D mode bots jump randomly rather than navigating smartly
-- In 3D mode the flee logic is a simple "move away from IT" with no avoidance radius awareness
-- Lobby shows a static "Map: Random" tile that doesn't change
+- 3D first-person tag game with random arena maps and 2D platformer mode
+- Maps have corridor walls, pillars, L-shapes, wonky blocks, boundary walls
+- Bots use photo-in-a-box billboard style with 4 uploaded face photos
+- Scene.tsx renders the 3D/2D environments
+- ObstacleCubes.tsx renders obstacle geometry
+- mapGen.ts generates obstacle layouts
 
 ## Requested Changes (Diff)
 
 ### Add
-- Map type selector in the lobby: host can pick "3D Arena", "2D Jump", or "Random" using a toggle/button group
-- Non-IT bots now run AROUND the map in patrol/wander mode most of the time, only switching to active flee when IT comes within a flee-radius (~8 units in 3D, ~10 units in 2D)
-- Flee radius constant exported so it can be tuned
-- In 2D mode: non-IT bots patrol back and forth across platforms; when IT is within flee range they sprint away horizontally and jump if cornered
+- "DEAD OR ALIVE" wanted poster props scattered throughout both 3D and 2D maps
+  - Each poster features one of the 4 uploaded photos: IMG_0963-1-1.jpeg, IMG_0964-1-2.jpeg, IMG_0929-3.png, IMG_0471-4.png
+  - Poster style: old western sepia/parchment-style billboard plane with "DEAD OR ALIVE" text above the photo and a reward amount below
+  - Posters appear on walls and as standalone standing boards
+  - 4-8 posters per map, each using a different photo cycling through all 4
+- Decorative map detail: floor decals (glowing circles/symbols), ceiling/overhead light rigs, scattered crates/barrels, broken pillars, dust/fog particles near the ground
+- 2D platformer: wanted posters hanging in the background layer, plus decorative background buildings/structures
 
 ### Modify
-- `App.tsx`: `handleStartGame` reads the host-selected `selectedMapType` instead of randomly picking. When selectedMapType is "random", keep existing random logic
-- `LobbyScreen.tsx`: replace static "Map: Random" info tile with an interactive map picker (host only); non-hosts see the current selection
-- `useGameLoop.ts`: rework non-IT bot logic — add patrol wander behaviour, and only flee when IT enters FLEE_RADIUS. IT bots retain existing smart chase + predictive lead logic
-- `LobbyScreen` props: add `selectedMapType` and `onMapTypeChange` props
+- mapGen.ts: add a `generateWantedPosters()` helper that returns poster position data (billboard planes with "DEAD OR ALIVE" text, not ObstacleBox)
+- Scene.tsx: render WantedPoster components using Billboard or flat mesh planes at specific positions, using the 4 new uploaded photo paths
+- ObstacleCubes.tsx: add variation — some obstacles get a graffiti/worn texture look via emissive color patterns, floor obstacles get a different roughness
 
 ### Remove
 - Nothing removed
 
 ## Implementation Plan
-1. Add `selectedMapType: "3d" | "2d-platformer" | "random"` state to `App.tsx`; pass it as prop to `LobbyScreen` and use it in `handleStartGame`
-2. Update `LobbyScreen` to show a map-type picker (3 buttons: 3D / 2D / Random) for host; display-only badge for non-host
-3. Update `useGameLoop.ts`:
-   - Add `FLEE_RADIUS` constant (8 for 3D, 10 for 2D)
-   - Non-IT bots: if IT distance > FLEE_RADIUS → patrol wander (slow circle/random walk around arena); if IT distance ≤ FLEE_RADIUS → flee at full speed
-   - 2D non-IT bots: patrol horizontally; flee when IT is close
-4. Validate and build
+1. Add WantedPoster component in Scene.tsx using Billboard + Text + useLoader for the photo texture
+   - Poster layout: dark parchment background plane, photo in center, "DEAD OR ALIVE" text above, "REWARD" text below
+   - Use the new uploaded photo paths: /assets/uploads/IMG_0963-1-1.jpeg, /assets/uploads/IMG_0964-1-2.jpeg, /assets/uploads/IMG_0929-3.png, /assets/uploads/IMG_0471-4.png
+2. Update bot face texture references in Scene.tsx from old paths to new uploaded paths (current code still references old paths that don't exist)
+3. Add poster placement data to mapGen.ts — export `generatePosterPositions(seed)` returning array of {id, position, photoIndex, rotation}
+4. In Scene.tsx 3D mode: render 4-8 WantedPoster components at generated positions (mounted on walls or as standing boards)
+5. In Scene.tsx 2D mode: render 2-4 WantedPoster components in background layer (z slightly behind platforms)
+6. Enhance map visuals: add decorative floor ring decals, overhead neon tube lights between walls, scattered small crate boxes
+7. Update GameScreen.tsx BOT_PHOTO_MAP to use new uploaded photo paths
