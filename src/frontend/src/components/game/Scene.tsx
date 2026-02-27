@@ -1,13 +1,8 @@
-import {
-  Billboard,
-  Grid,
-  PointerLockControls,
-  Text,
-  useTexture,
-} from "@react-three/drei";
-import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect, useRef } from "react";
+import { Billboard, Grid, PointerLockControls, Text } from "@react-three/drei";
+import { useFrame, useLoader, useThree } from "@react-three/fiber";
+import { Component, type ReactNode, Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
+import { TextureLoader } from "three";
 import type { ObstacleBox, PlayerState } from "../../types/game";
 import { ObstacleCubes } from "./ObstacleCubes";
 
@@ -52,20 +47,38 @@ const ARENA_LIGHTS: {
   { id: "alight-e", pos: [18, 4, 0], color: "#aa00ff", intensity: 5 },
 ];
 
+// Simple error boundary for Three.js components
+class ThreeErrorBoundary extends Component<
+  { children: ReactNode; fallback?: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback?: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback ?? null;
+    return this.props.children;
+  }
+}
+
 interface BotCharacterProps {
   player: PlayerState;
   botIndex: number;
 }
 
-function BotCharacter({ player, botIndex }: BotCharacterProps) {
+function BotCharacterInner({ player, botIndex }: BotCharacterProps) {
   const texturePath = BOT_FACE_TEXTURES[botIndex % BOT_FACE_TEXTURES.length];
-  const texture = useTexture(texturePath);
+  // useLoader with TextureLoader — Suspense-friendly
+  const texture = useLoader(TextureLoader, texturePath);
 
   const isIT = player.isIT;
   const hasImmunity = (player.tagImmunityTimer ?? 0) > 0;
   const scale = isIT ? 1.3 : 1.0;
 
-  // Flash effect when immune
   const flashRef = useRef(0);
   useFrame((_, delta) => {
     flashRef.current += delta * 10;
@@ -123,7 +136,7 @@ function BotCharacter({ player, botIndex }: BotCharacterProps) {
           outlineColor="#000000"
         >
           {player.name}
-          {isIT ? " 🔴" : ""}
+          {isIT ? " IT" : ""}
         </Text>
       </Billboard>
 
@@ -143,6 +156,45 @@ function BotCharacter({ player, botIndex }: BotCharacterProps) {
         </mesh>
       )}
     </group>
+  );
+}
+
+// Fallback bot (simple colored box) when texture fails or suspends
+function BotFallback({ player }: { player: PlayerState }) {
+  const isIT = player.isIT;
+  const color = isIT ? "#ff2200" : "#00ccff";
+  return (
+    <group position={[player.position.x, player.position.y, player.position.z]}>
+      {isIT && (
+        <pointLight color="#ff2200" intensity={15} distance={8} decay={2} />
+      )}
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[0.8, 1.0, 0.8]} />
+        <meshStandardMaterial
+          color={color}
+          emissive={color}
+          emissiveIntensity={0.4}
+          roughness={0.4}
+          metalness={0.6}
+        />
+      </mesh>
+      {isIT && (
+        <mesh position={[0, -0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.8, 1.1, 32]} />
+          <meshBasicMaterial color="#ff2200" transparent opacity={0.6} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
+function BotCharacter({ player, botIndex }: BotCharacterProps) {
+  return (
+    <ThreeErrorBoundary fallback={<BotFallback player={player} />}>
+      <Suspense fallback={<BotFallback player={player} />}>
+        <BotCharacterInner player={player} botIndex={botIndex} />
+      </Suspense>
+    </ThreeErrorBoundary>
   );
 }
 
@@ -196,12 +248,19 @@ export function Scene({
     }
   }
 
-  // Initialize camera position (run once on mount)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once
+  // Initialize camera position on mount
   useEffect(() => {
-    // Both 3D and 2D are first-person — start at eye level
     camera.position.set(0, 0.9, 0);
-  }, []);
+    camera.rotation.set(0, 0, 0);
+    camera.rotation.order = "YXZ";
+  }, [camera]);
+
+  // Sync camera ref for game loop to read yaw
+  useEffect(() => {
+    if (cameraRef) {
+      cameraRef.current = camera as unknown as { rotation: { y: number } };
+    }
+  }, [camera, cameraRef]);
 
   // Pointer lock change handler (PC only — mobile never acquires pointer lock)
   useEffect(() => {
@@ -224,7 +283,6 @@ export function Scene({
   }, [onPointerLockChange, controlMode]);
 
   // Mobile touch-drag camera look
-  // We track a single touch finger and rotate the camera's euler yaw/pitch
   const mobileLookRef = useRef<{ id: number; x: number; y: number } | null>(
     null,
   );
@@ -237,7 +295,6 @@ export function Scene({
     const SENSITIVITY = 0.004;
 
     const onTouchStart = (e: TouchEvent) => {
-      // Only capture touches on the right half of the screen (left half = D-pad)
       const touch = Array.from(e.changedTouches).find(
         (t) => t.clientX > window.innerWidth / 2,
       );
@@ -270,7 +327,6 @@ export function Scene({
         Math.min(Math.PI / 3, mobilePitchRef.current - dy * SENSITIVITY),
       );
 
-      // Apply to camera using Euler order YXZ (standard FPS)
       camera.rotation.order = "YXZ";
       camera.rotation.y = mobileYawRef.current;
       camera.rotation.x = mobilePitchRef.current;
@@ -300,23 +356,14 @@ export function Scene({
     };
   }, [controlMode, camera]);
 
-  // Sync camera ref for game loop to read yaw
-  useEffect(() => {
-    if (cameraRef) {
-      cameraRef.current = camera as unknown as { rotation: { y: number } };
-    }
-  }, [camera, cameraRef]);
-
   useFrame((_, delta) => {
     onFrame(delta, onPlayersUpdate);
 
     const localPlayer = players.find((p) => p.isLocal);
     if (localPlayer) {
-      // First-person for both 3D and 2D — camera AT player eye position
       camera.position.x = localPlayer.position.x;
       camera.position.y = localPlayer.position.y + 0.4;
       camera.position.z = localPlayer.position.z;
-      // Camera rotation is controlled by PointerLockControls
     }
   });
 
@@ -339,7 +386,6 @@ export function Scene({
         {controlMode !== "mobile" && (
           <PointerLockControls
             ref={controlsRef}
-            makeDefault
             onLock={() => {
               isLockedRef.current = true;
               onPointerLockChange?.(true);
@@ -384,7 +430,6 @@ export function Scene({
                 ]}
               >
                 <Billboard position={[0, 0.6, 0]}>
-                  {/* Frame plane */}
                   <mesh scale={[1.15, 1.15, 1]}>
                     <planeGeometry args={[1, 1]} />
                     <meshStandardMaterial
@@ -395,7 +440,6 @@ export function Scene({
                       metalness={0.6}
                     />
                   </mesh>
-                  {/* Color front plane */}
                   <mesh scale={[1.0, 1.0, 1]} position={[0, 0, 0.01]}>
                     <planeGeometry args={[1, 1]} />
                     <meshStandardMaterial
@@ -416,7 +460,7 @@ export function Scene({
                     outlineColor="#000000"
                   >
                     {player.name}
-                    {player.isIT ? " 🔴" : ""}
+                    {player.isIT ? " IT" : ""}
                   </Text>
                 </Billboard>
               </group>
@@ -501,7 +545,6 @@ export function Scene({
       {controlMode !== "mobile" && (
         <PointerLockControls
           ref={controlsRef}
-          makeDefault
           onLock={() => {
             isLockedRef.current = true;
             onPointerLockChange?.(true);
@@ -529,7 +572,7 @@ export function Scene({
               />
             );
           }
-          // Non-local human players — photo-in-a-box style with color front
+          // Non-local human players
           return (
             <group
               key={player.id}
@@ -540,7 +583,6 @@ export function Scene({
               ]}
             >
               <Billboard position={[0, 0.6, 0]}>
-                {/* Frame plane */}
                 <mesh scale={[1.15, 1.15, 1]}>
                   <planeGeometry args={[1, 1]} />
                   <meshStandardMaterial
@@ -551,7 +593,6 @@ export function Scene({
                     metalness={0.6}
                   />
                 </mesh>
-                {/* Color front plane */}
                 <mesh scale={[1.0, 1.0, 1]} position={[0, 0, 0.01]}>
                   <planeGeometry args={[1, 1]} />
                   <meshStandardMaterial
@@ -572,7 +613,7 @@ export function Scene({
                   outlineColor="#000000"
                 >
                   {player.name}
-                  {player.isIT ? " 🔴" : ""}
+                  {player.isIT ? " IT" : ""}
                 </Text>
               </Billboard>
             </group>

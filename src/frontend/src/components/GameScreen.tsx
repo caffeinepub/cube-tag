@@ -287,9 +287,15 @@ export function GameScreen({
       {/* 3D Canvas */}
       <Canvas
         shadows
-        camera={{ position: [0, 0.9, 0], fov: 75 }}
-        style={{ position: "absolute", inset: 0 }}
-        gl={{ antialias: true }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+        }}
+        gl={{ antialias: true, powerPreference: "high-performance" }}
+        camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 0.9, 0] }}
+        frameloop="always"
       >
         <Scene
           players={players}
