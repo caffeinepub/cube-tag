@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 const DECO_CUBES = [
   {
@@ -72,22 +72,28 @@ const DECO_CUBES = [
 ];
 
 interface HomeScreenProps {
-  onCreateRoom: (playerName: string) => void;
-  onJoinRoom: (playerName: string, roomCode: string) => void;
+  onCreateRoom: (playerName: string, controlMode: "pc" | "mobile") => void;
+  onJoinRoom: (
+    playerName: string,
+    roomCode: string,
+    controlMode: "pc" | "mobile",
+  ) => void;
 }
 
 export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
   const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
-  const [mode, setMode] = useState<"main" | "join">("main");
+  const [mode, setMode] = useState<"main" | "join" | "controls">("main");
   const [error, setError] = useState("");
+  const pendingAction = useRef<"create" | "join">("create");
 
   const handleCreate = () => {
     if (!playerName.trim()) {
       setError("Enter your name first!");
       return;
     }
-    onCreateRoom(playerName.trim());
+    pendingAction.current = "create";
+    setMode("controls");
   };
 
   const handleJoin = () => {
@@ -99,7 +105,20 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
       setError("Enter a valid room code!");
       return;
     }
-    onJoinRoom(playerName.trim(), joinCode.trim().toUpperCase());
+    pendingAction.current = "join";
+    setMode("controls");
+  };
+
+  const handleSelectControl = (controlMode: "pc" | "mobile") => {
+    if (pendingAction.current === "create") {
+      onCreateRoom(playerName.trim(), controlMode);
+    } else {
+      onJoinRoom(playerName.trim(), joinCode.trim().toUpperCase(), controlMode);
+    }
+  };
+
+  const handleBackFromControls = () => {
+    setMode(pendingAction.current === "join" ? "join" : "main");
   };
 
   return (
@@ -168,27 +187,29 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          {/* Player Name Input */}
-          <div className="space-y-2">
-            <Label
-              className="text-xs tracking-widest uppercase text-muted-foreground"
-              htmlFor="player-name"
-            >
-              Your Name
-            </Label>
-            <Input
-              id="player-name"
-              placeholder="Enter your name..."
-              value={playerName}
-              onChange={(e) => {
-                setPlayerName(e.target.value);
-                setError("");
-              }}
-              maxLength={16}
-              className="bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-0 h-11"
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-            />
-          </div>
+          {mode !== "controls" && (
+            /* Player Name Input — shown on main and join screens */
+            <div className="space-y-2">
+              <Label
+                className="text-xs tracking-widest uppercase text-muted-foreground"
+                htmlFor="player-name"
+              >
+                Your Name
+              </Label>
+              <Input
+                id="player-name"
+                placeholder="Enter your name..."
+                value={playerName}
+                onChange={(e) => {
+                  setPlayerName(e.target.value);
+                  setError("");
+                }}
+                maxLength={16}
+                className="bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-0 h-11"
+                onKeyDown={(e) => e.key === "Enter" && handleCreate()}
+              />
+            </div>
+          )}
 
           {error && (
             <motion.p
@@ -201,7 +222,7 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
             </motion.p>
           )}
 
-          {mode === "main" ? (
+          {mode === "main" && (
             <div className="space-y-3">
               <Button
                 className="w-full h-12 text-base font-bold tracking-wide neon-border-cyan"
@@ -221,7 +242,9 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
                 🔗 Join Room
               </Button>
             </div>
-          ) : (
+          )}
+
+          {mode === "join" && (
             <motion.div
               className="space-y-3"
               initial={{ opacity: 0, x: 20 }}
@@ -270,22 +293,133 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
               </Button>
             </motion.div>
           )}
+
+          {mode === "controls" && (
+            <motion.div
+              className="space-y-5"
+              initial={{ opacity: 0, x: 30 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            >
+              {/* Header */}
+              <div className="text-center space-y-1">
+                <p
+                  className="text-xs tracking-widest uppercase font-bold"
+                  style={{ color: "oklch(0.82 0.18 195)" }}
+                >
+                  Choose Your Controls
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  How will you play,{" "}
+                  <span className="text-foreground font-semibold">
+                    {playerName}
+                  </span>
+                  ?
+                </p>
+              </div>
+
+              {/* Control cards */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* PC Card */}
+                <motion.button
+                  className="relative group rounded-xl p-5 text-center cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{
+                    background: "oklch(0.14 0.03 260 / 0.8)",
+                    border: "1px solid oklch(0.82 0.18 195 / 0.3)",
+                  }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleSelectControl("pc")}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && handleSelectControl("pc")
+                  }
+                >
+                  {/* Hover glow */}
+                  <div
+                    className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+                    style={{
+                      border: "1px solid oklch(0.82 0.18 195 / 0.9)",
+                      boxShadow:
+                        "0 0 16px oklch(0.82 0.18 195 / 0.35), inset 0 0 20px oklch(0.82 0.18 195 / 0.05)",
+                    }}
+                  />
+                  {/* Icon */}
+                  <div className="text-4xl mb-3 leading-none">⌨️</div>
+                  <div
+                    className="text-sm font-black tracking-wide mb-1"
+                    style={{ color: "oklch(0.82 0.18 195)" }}
+                  >
+                    PC / Desktop
+                  </div>
+                  <div className="text-xs text-muted-foreground leading-tight">
+                    WASD or Arrow Keys
+                  </div>
+                </motion.button>
+
+                {/* Mobile Card */}
+                <motion.button
+                  className="relative group rounded-xl p-5 text-center cursor-pointer transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  style={{
+                    background: "oklch(0.14 0.03 260 / 0.8)",
+                    border: "1px solid oklch(0.75 0.22 140 / 0.3)",
+                  }}
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => handleSelectControl("mobile")}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && handleSelectControl("mobile")
+                  }
+                >
+                  {/* Hover glow */}
+                  <div
+                    className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
+                    style={{
+                      border: "1px solid oklch(0.75 0.22 140 / 0.9)",
+                      boxShadow:
+                        "0 0 16px oklch(0.75 0.22 140 / 0.35), inset 0 0 20px oklch(0.75 0.22 140 / 0.05)",
+                    }}
+                  />
+                  {/* Icon */}
+                  <div className="text-4xl mb-3 leading-none">📱</div>
+                  <div
+                    className="text-sm font-black tracking-wide mb-1"
+                    style={{ color: "oklch(0.75 0.22 140)" }}
+                  >
+                    Mobile
+                  </div>
+                  <div className="text-xs text-muted-foreground leading-tight">
+                    On-screen joystick
+                  </div>
+                </motion.button>
+              </div>
+
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={handleBackFromControls}
+              >
+                ← Back
+              </Button>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Controls hint */}
-        <motion.div
-          className="mt-6 text-center space-y-1"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-        >
-          <p className="text-xs text-muted-foreground">
-            🎮 WASD or Arrow Keys to move
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Tag other players to pass IT · Survive 100 seconds
-          </p>
-        </motion.div>
+        {mode !== "controls" && (
+          <motion.div
+            className="mt-6 text-center space-y-1"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+          >
+            <p className="text-xs text-muted-foreground">
+              🎮 WASD or Arrow Keys to move
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Tag other players to pass IT · Survive 100 seconds
+            </p>
+          </motion.div>
+        )}
 
         {/* Footer */}
         <p className="text-center text-xs text-muted-foreground mt-8 opacity-50">

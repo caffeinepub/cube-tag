@@ -11,6 +11,8 @@ interface LobbyScreenProps {
   onLeave: () => void;
   onKickPlayer?: (id: string) => void;
   mapType?: "3d" | "2d-platformer";
+  gameDuration?: number;
+  onDurationChange?: (d: number) => void;
 }
 
 export function LobbyScreen({
@@ -21,6 +23,8 @@ export function LobbyScreen({
   onLeave,
   onKickPlayer,
   mapType,
+  gameDuration = 100,
+  onDurationChange,
 }: LobbyScreenProps) {
   const mapLabel =
     mapType === "2d-platformer"
@@ -133,6 +137,61 @@ export function LobbyScreen({
           </div>
         </motion.div>
 
+        {/* Duration picker — host only */}
+        {isHost && onDurationChange && (
+          <motion.div
+            className="game-panel rounded-2xl p-4 mb-5"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.25 }}
+          >
+            <p className="text-xs tracking-widest uppercase text-muted-foreground mb-3">
+              Game Duration
+            </p>
+            <div className="flex items-center justify-center gap-4">
+              <button
+                type="button"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-xl font-black transition-all active:scale-95 hover:opacity-80"
+                style={{
+                  background: "oklch(0.15 0.03 260 / 0.8)",
+                  border: "1px solid oklch(0.82 0.18 195 / 0.4)",
+                  color: "oklch(0.82 0.18 195)",
+                }}
+                onClick={() =>
+                  onDurationChange(Math.max(100, gameDuration - 50))
+                }
+                disabled={gameDuration <= 100}
+              >
+                −
+              </button>
+              <div
+                className="text-2xl font-display font-black tabular-nums min-w-[80px] text-center"
+                style={{ color: "oklch(0.82 0.18 195)" }}
+              >
+                {gameDuration}s
+              </div>
+              <button
+                type="button"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-xl font-black transition-all active:scale-95 hover:opacity-80"
+                style={{
+                  background: "oklch(0.15 0.03 260 / 0.8)",
+                  border: "1px solid oklch(0.82 0.18 195 / 0.4)",
+                  color: "oklch(0.82 0.18 195)",
+                }}
+                onClick={() =>
+                  onDurationChange(Math.min(500, gameDuration + 50))
+                }
+                disabled={gameDuration >= 500}
+              >
+                +
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground text-center mt-2">
+              Range: 100s – 500s
+            </p>
+          </motion.div>
+        )}
+
         {/* Game info */}
         <motion.div
           className="grid grid-cols-3 gap-3 mb-5"
@@ -141,7 +200,7 @@ export function LobbyScreen({
           transition={{ delay: 0.3 }}
         >
           {[
-            { label: "Time", value: "100s" },
+            { label: "Time", value: `${gameDuration}s` },
             { label: "Players", value: `${players.length}` },
             { label: "Map", value: mapLabel },
           ].map((stat) => (

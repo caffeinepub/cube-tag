@@ -16,6 +16,8 @@ export interface PlayerState {
   isBot: boolean;
   velocityY?: number;
   onGround?: boolean;
+  tagImmunityTimer?: number; // seconds remaining of post-tag immunity (3s)
+  yaw?: number; // horizontal look angle in radians for first-person view
 }
 
 export interface ObstacleBox {
@@ -23,6 +25,7 @@ export interface ObstacleBox {
   position: Vec3;
   size: Vec3;
   color: string;
+  rotation?: Vec3; // optional Euler rotation
 }
 
 export interface GameState {

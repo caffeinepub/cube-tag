@@ -1,19 +1,150 @@
-import { Grid, Sky } from "@react-three/drei";
+import {
+  Billboard,
+  Grid,
+  PointerLockControls,
+  Text,
+  useTexture,
+} from "@react-three/drei";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import type { ObstacleBox, PlayerState } from "../../types/game";
 import { ObstacleCubes } from "./ObstacleCubes";
-import { PlayerCube } from "./PlayerCube";
 
-// Static star positions for 2D mode backdrop (generated once)
-const STAR_POSITIONS = Array.from({ length: 30 }, (_, i) => ({
-  id: `star-${i * 7919 + 1}`,
-  pos: [((i * 137.5) % 40) - 20, (i * 73) % 14, -5 - (i % 5) * 3] as [
-    number,
-    number,
-    number,
-  ],
-}));
+// Bot face image paths — matches the uploaded photos
+const BOT_FACE_TEXTURES = [
+  "/assets/uploads/IMG_0965-1.jpeg", // Bot Alpha: chubby fries guy
+  "/assets/uploads/IMG_0963-2.jpeg", // Bot Beta: muscular statue
+  "/assets/uploads/IMG_0964-3.jpeg", // Bot Gamma: monkey
+  "/assets/uploads/IMG_0451-4.jpeg", // Bot 3: kid
+];
+
+// Static starfield positions (generated once)
+const STAR_POSITIONS: { id: string; pos: [number, number, number] }[] =
+  Array.from({ length: 200 }, (_, i) => {
+    const r = 30 + (i % 15) * 2;
+    const theta = (i * 137.508 * Math.PI) / 180;
+    const phi = Math.acos(1 - 2 * ((i * 0.618033) % 1));
+    return {
+      id: `star3d-${i * 31337 + 7}`,
+      pos: [
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi) * 3 + 5,
+        r * Math.sin(phi) * Math.sin(theta),
+      ] as [number, number, number],
+    };
+  });
+
+// Decorative colored lights scattered around arena
+const ARENA_LIGHTS: {
+  id: string;
+  pos: [number, number, number];
+  color: string;
+  intensity: number;
+}[] = [
+  { id: "alight-nw", pos: [-15, 3, -15], color: "#2244ff", intensity: 8 },
+  { id: "alight-ne", pos: [15, 3, -15], color: "#8800ff", intensity: 8 },
+  { id: "alight-sw", pos: [-15, 3, 15], color: "#00ccff", intensity: 8 },
+  { id: "alight-se", pos: [15, 3, 15], color: "#ff0088", intensity: 6 },
+  { id: "alight-n", pos: [0, 4, -18], color: "#4400ff", intensity: 5 },
+  { id: "alight-s", pos: [0, 4, 18], color: "#00ffcc", intensity: 5 },
+  { id: "alight-w", pos: [-18, 4, 0], color: "#ff4400", intensity: 5 },
+  { id: "alight-e", pos: [18, 4, 0], color: "#aa00ff", intensity: 5 },
+];
+
+interface BotCharacterProps {
+  player: PlayerState;
+  botIndex: number;
+}
+
+function BotCharacter({ player, botIndex }: BotCharacterProps) {
+  const texturePath = BOT_FACE_TEXTURES[botIndex % BOT_FACE_TEXTURES.length];
+  const texture = useTexture(texturePath);
+
+  const isIT = player.isIT;
+  const hasImmunity = (player.tagImmunityTimer ?? 0) > 0;
+  const scale = isIT ? 1.3 : 1.0;
+
+  // Flash effect when immune
+  const flashRef = useRef(0);
+  useFrame((_, delta) => {
+    flashRef.current += delta * 10;
+  });
+
+  const flashOpacity = hasImmunity
+    ? 0.5 + 0.5 * Math.sin(flashRef.current * 5)
+    : 1;
+
+  return (
+    <group position={[player.position.x, player.position.y, player.position.z]}>
+      {/* IT red glow */}
+      {isIT && (
+        <pointLight color="#ff2200" intensity={15} distance={8} decay={2} />
+      )}
+
+      {/* Photo-in-a-box: frame (slightly larger dark back plane) + photo front plane */}
+      <Billboard position={[0, 0.6, 0]}>
+        {/* Frame / border plane */}
+        <mesh scale={[1.15 * scale, 1.15 * scale, 1]}>
+          <planeGeometry args={[1, 1]} />
+          <meshStandardMaterial
+            color={isIT ? "#ff2200" : "#111111"}
+            emissive={isIT ? "#cc1100" : "#000000"}
+            emissiveIntensity={isIT ? 0.6 : 0}
+            roughness={0.5}
+            metalness={0.6}
+            transparent={hasImmunity}
+            opacity={flashOpacity}
+          />
+        </mesh>
+        {/* Photo plane */}
+        <mesh scale={[1.0 * scale, 1.0 * scale, 1]} position={[0, 0, 0.01]}>
+          <planeGeometry args={[1, 1]} />
+          <meshStandardMaterial
+            map={texture}
+            transparent
+            opacity={flashOpacity}
+            roughness={0.5}
+            emissive={isIT ? "#ff0000" : "#000000"}
+            emissiveIntensity={isIT ? 0.3 : 0}
+            side={2}
+          />
+        </mesh>
+      </Billboard>
+
+      {/* Name tag */}
+      <Billboard position={[0, 1.3, 0]}>
+        <Text
+          fontSize={0.3}
+          color={isIT ? "#ff6644" : "#ccffee"}
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.04}
+          outlineColor="#000000"
+        >
+          {player.name}
+          {isIT ? " 🔴" : ""}
+        </Text>
+      </Billboard>
+
+      {/* IT status ring on ground */}
+      {isIT && (
+        <mesh position={[0, -0.45, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.8, 1.1, 32]} />
+          <meshBasicMaterial color="#ff2200" transparent opacity={0.6} />
+        </mesh>
+      )}
+
+      {/* Immunity ring */}
+      {hasImmunity && (
+        <mesh position={[0, -0.45, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <ringGeometry args={[0.6, 0.75, 32]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.7} />
+        </mesh>
+      )}
+    </group>
+  );
+}
 
 interface SceneProps {
   players: PlayerState[];
@@ -22,7 +153,23 @@ interface SceneProps {
   onFrame: (delta: number, onUpdate: (players: PlayerState[]) => void) => void;
   onPlayersUpdate: (players: PlayerState[]) => void;
   mapType?: "3d" | "2d-platformer";
+  cameraRef?: React.MutableRefObject<{ rotation: { y: number } } | null>;
+  onPointerLockChange?: (locked: boolean) => void;
+  controlMode?: "pc" | "mobile";
 }
+
+// Static 2D stars
+const STAR_POSITIONS_2D = Array.from({ length: 30 }, (_, i) => ({
+  id: `star-${i * 7919 + 1}`,
+  pos: [((i * 137.5) % 40) - 20, (i * 73) % 14, -5 - (i % 5) * 3] as [
+    number,
+    number,
+    number,
+  ],
+}));
+
+// Track bot indices by player id
+const botIndexMap: Record<string, number> = {};
 
 export function Scene({
   players,
@@ -30,52 +177,153 @@ export function Scene({
   onFrame,
   onPlayersUpdate,
   mapType = "3d",
+  cameraRef,
+  onPointerLockChange,
+  controlMode = "pc",
 }: SceneProps) {
   const { camera } = useThree();
   const is2D = mapType === "2d-platformer";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null);
+  const isLockedRef = useRef(false);
+
+  // Assign bot indices on first render
+  const botPlayers = players.filter((p) => p.isBot);
+  for (let i = 0; i < botPlayers.length; i++) {
+    const p = botPlayers[i];
+    if (botIndexMap[p.id] === undefined) {
+      botIndexMap[p.id] = i;
+    }
+  }
+
+  // Initialize camera position (run once on mount)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally run once
+  useEffect(() => {
+    // Both 3D and 2D are first-person — start at eye level
+    camera.position.set(0, 0.9, 0);
+  }, []);
+
+  // Pointer lock change handler (PC only — mobile never acquires pointer lock)
+  useEffect(() => {
+    if (controlMode === "mobile") return;
+
+    const handlePointerLockChange = () => {
+      const locked = document.pointerLockElement !== null;
+      isLockedRef.current = locked;
+      onPointerLockChange?.(locked);
+    };
+
+    document.addEventListener("pointerlockchange", handlePointerLockChange);
+
+    return () => {
+      document.removeEventListener(
+        "pointerlockchange",
+        handlePointerLockChange,
+      );
+    };
+  }, [onPointerLockChange, controlMode]);
+
+  // Mobile touch-drag camera look
+  // We track a single touch finger and rotate the camera's euler yaw/pitch
+  const mobileLookRef = useRef<{ id: number; x: number; y: number } | null>(
+    null,
+  );
+  const mobileYawRef = useRef(0);
+  const mobilePitchRef = useRef(0);
+
+  useEffect(() => {
+    if (controlMode !== "mobile") return;
+
+    const SENSITIVITY = 0.004;
+
+    const onTouchStart = (e: TouchEvent) => {
+      // Only capture touches on the right half of the screen (left half = D-pad)
+      const touch = Array.from(e.changedTouches).find(
+        (t) => t.clientX > window.innerWidth / 2,
+      );
+      if (!touch) return;
+      mobileLookRef.current = {
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!mobileLookRef.current) return;
+      const touch = Array.from(e.changedTouches).find(
+        (t) => t.identifier === mobileLookRef.current!.id,
+      );
+      if (!touch) return;
+
+      const dx = touch.clientX - mobileLookRef.current.x;
+      const dy = touch.clientY - mobileLookRef.current.y;
+      mobileLookRef.current = {
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+      };
+
+      mobileYawRef.current -= dx * SENSITIVITY;
+      mobilePitchRef.current = Math.max(
+        -Math.PI / 3,
+        Math.min(Math.PI / 3, mobilePitchRef.current - dy * SENSITIVITY),
+      );
+
+      // Apply to camera using Euler order YXZ (standard FPS)
+      camera.rotation.order = "YXZ";
+      camera.rotation.y = mobileYawRef.current;
+      camera.rotation.x = mobilePitchRef.current;
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (!mobileLookRef.current) return;
+      const ended = Array.from(e.changedTouches).find(
+        (t) => t.identifier === mobileLookRef.current!.id,
+      );
+      if (ended) mobileLookRef.current = null;
+    };
+
+    const canvas = document.querySelector("canvas");
+    if (!canvas) return;
+
+    canvas.addEventListener("touchstart", onTouchStart, { passive: true });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: true });
+    canvas.addEventListener("touchend", onTouchEnd, { passive: true });
+    canvas.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
+      canvas.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [controlMode, camera]);
+
+  // Sync camera ref for game loop to read yaw
+  useEffect(() => {
+    if (cameraRef) {
+      cameraRef.current = camera as unknown as { rotation: { y: number } };
+    }
+  }, [camera, cameraRef]);
 
   useFrame((_, delta) => {
     onFrame(delta, onPlayersUpdate);
 
     const localPlayer = players.find((p) => p.isLocal);
     if (localPlayer) {
-      if (is2D) {
-        // Side-scroll: follow X only, fixed Y and Z
-        camera.position.x += (localPlayer.position.x - camera.position.x) * 0.1;
-        camera.position.y +=
-          (localPlayer.position.y + 3 - camera.position.y) * 0.08;
-        camera.position.z = 20;
-        camera.lookAt(camera.position.x, camera.position.y - 3, 0);
-      } else {
-        // 3D follow camera
-        const targetX = localPlayer.position.x;
-        const targetZ = localPlayer.position.z;
-        camera.position.x += (targetX - camera.position.x + 0) * 0.08;
-        camera.position.z += (targetZ + 14 - camera.position.z) * 0.08;
-        camera.position.y += (10 - camera.position.y) * 0.08;
-        camera.lookAt(targetX, 0, targetZ);
-      }
+      // First-person for both 3D and 2D — camera AT player eye position
+      camera.position.x = localPlayer.position.x;
+      camera.position.y = localPlayer.position.y + 0.4;
+      camera.position.z = localPlayer.position.z;
+      // Camera rotation is controlled by PointerLockControls
     }
   });
-
-  // Initialize camera
-  useEffect(() => {
-    if (is2D) {
-      camera.position.set(0, 5, 20);
-      camera.lookAt(0, 5, 0);
-    } else {
-      camera.position.set(0, 10, 14);
-      camera.lookAt(0, 0, 0);
-    }
-  }, [camera, is2D]);
 
   if (is2D) {
     return (
       <>
-        {/* Dark space background */}
         <color attach="background" args={["#0a0020"]} />
-
-        {/* Lighting for 2D */}
         <ambientLight intensity={0.7} color="#ccaaff" />
         <directionalLight
           position={[0, 10, 10]}
@@ -87,34 +335,112 @@ export function Scene({
         />
         <pointLight position={[0, 8, 5]} intensity={0.5} color="#ff44cc" />
 
-        {/* Decorative star particles (static distant points) */}
-        {STAR_POSITIONS.map((pos) => (
-          <mesh key={pos.id} position={pos.pos}>
+        {/* PointerLockControls for first-person mouse look in 2D mode (PC only) */}
+        {controlMode !== "mobile" && (
+          <PointerLockControls
+            ref={controlsRef}
+            makeDefault
+            onLock={() => {
+              isLockedRef.current = true;
+              onPointerLockChange?.(true);
+            }}
+            onUnlock={() => {
+              isLockedRef.current = false;
+              onPointerLockChange?.(false);
+            }}
+          />
+        )}
+
+        {STAR_POSITIONS_2D.map((star) => (
+          <mesh key={star.id} position={star.pos}>
             <sphereGeometry args={[0.04, 4, 4]} />
             <meshBasicMaterial color="#ffffff" />
           </mesh>
         ))}
 
-        {/* Platforms / Obstacles */}
         <ObstacleCubes obstacles={obstacles} />
 
-        {/* Players */}
-        {players.map((player) => (
-          <PlayerCube key={player.id} player={player} />
-        ))}
+        {/* Only render non-local players (first-person: no body for local player) */}
+        {players
+          .filter((p) => !p.isLocal)
+          .map((player) => {
+            if (player.isBot) {
+              return (
+                <BotCharacter
+                  key={player.id}
+                  player={player}
+                  botIndex={botIndexMap[player.id] ?? 0}
+                />
+              );
+            }
+            // Non-local human players in 2D — photo-in-a-box style with color front
+            return (
+              <group
+                key={player.id}
+                position={[
+                  player.position.x,
+                  player.position.y,
+                  player.position.z,
+                ]}
+              >
+                <Billboard position={[0, 0.6, 0]}>
+                  {/* Frame plane */}
+                  <mesh scale={[1.15, 1.15, 1]}>
+                    <planeGeometry args={[1, 1]} />
+                    <meshStandardMaterial
+                      color={player.isIT ? "#ff2200" : "#111111"}
+                      emissive={player.isIT ? "#cc1100" : "#000000"}
+                      emissiveIntensity={player.isIT ? 0.6 : 0}
+                      roughness={0.5}
+                      metalness={0.6}
+                    />
+                  </mesh>
+                  {/* Color front plane */}
+                  <mesh scale={[1.0, 1.0, 1]} position={[0, 0, 0.01]}>
+                    <planeGeometry args={[1, 1]} />
+                    <meshStandardMaterial
+                      color={player.isIT ? "#ff3a1a" : player.color}
+                      emissive={player.isIT ? "#cc2200" : player.color}
+                      emissiveIntensity={0.3}
+                      roughness={0.5}
+                    />
+                  </mesh>
+                </Billboard>
+                <Billboard position={[0, 1.3, 0]}>
+                  <Text
+                    fontSize={0.3}
+                    color={player.isIT ? "#ff6644" : "#ccffee"}
+                    anchorX="center"
+                    anchorY="middle"
+                    outlineWidth={0.04}
+                    outlineColor="#000000"
+                  >
+                    {player.name}
+                    {player.isIT ? " 🔴" : ""}
+                  </Text>
+                </Billboard>
+              </group>
+            );
+          })}
       </>
     );
   }
 
-  // ── 3D mode ──────────────────────────────────────────────────────────────
+  // ── 3D FIRST-PERSON MODE ─────────────────────────────────────────────────
   return (
     <>
+      {/* Fog — dense and moody */}
+      <fog attach="fog" args={["#06040f", 15, 45]} />
+
+      {/* Dark void background */}
+      <color attach="background" args={["#06040f"]} />
+
       {/* Lighting */}
-      <ambientLight intensity={0.4} color="#8899cc" />
+      <ambientLight intensity={0.15} color="#1a0a3a" />
       <directionalLight
         position={[10, 20, 10]}
-        intensity={1.2}
-        color="#ffffff"
+        intensity={1.5}
+        color="#aaaaff"
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -124,69 +450,134 @@ export function Scene({
         shadow-camera-top={30}
         shadow-camera-bottom={-30}
       />
-      <directionalLight
-        position={[-10, 8, -10]}
-        intensity={0.3}
-        color="#4466aa"
-      />
 
-      {/* Fog */}
-      <fog attach="fog" args={["#0a0d1a", 30, 80]} />
+      {/* Colored arena accent lights */}
+      {ARENA_LIGHTS.map((light) => (
+        <pointLight
+          key={light.id}
+          position={light.pos}
+          color={light.color}
+          intensity={light.intensity}
+          distance={18}
+          decay={2}
+        />
+      ))}
 
-      {/* Sky */}
-      <Sky
-        distance={450000}
-        sunPosition={[0, 0.1, -1]}
-        inclination={0}
-        azimuth={0.25}
-        rayleigh={3}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.7}
-        turbidity={10}
-      />
+      {/* Starfield */}
+      {STAR_POSITIONS.map((star) => (
+        <mesh key={star.id} position={star.pos}>
+          <sphereGeometry args={[0.04, 4, 4]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+      ))}
 
-      {/* Ground */}
+      {/* Ground — dark glossy with grid */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[42, 42]} />
-        <meshStandardMaterial color="#1a1f2e" roughness={0.9} metalness={0.1} />
+        <planeGeometry args={[50, 50]} />
+        <meshStandardMaterial
+          color="#080614"
+          roughness={0.1}
+          metalness={0.8}
+          envMapIntensity={0.5}
+        />
       </mesh>
 
-      {/* Grid lines on ground */}
+      {/* Grid lines */}
       <Grid
         position={[0, 0.01, 0]}
-        args={[42, 42]}
+        args={[50, 50]}
         cellSize={2}
-        cellThickness={0.4}
-        cellColor="#1e2d4a"
+        cellThickness={0.3}
+        cellColor="#1a0a3a"
         sectionSize={10}
-        sectionThickness={0.8}
-        sectionColor="#2a3d6a"
-        fadeDistance={50}
-        fadeStrength={1}
+        sectionThickness={0.6}
+        sectionColor="#3a0a6a"
+        fadeDistance={40}
+        fadeStrength={1.5}
         infiniteGrid={false}
       />
 
-      {/* Boundary walls */}
-      {[-20, 20].map((x) => (
-        <mesh key={`wx-${x}`} position={[x, 1, 0]}>
-          <boxGeometry args={[0.2, 2, 42]} />
-          <meshBasicMaterial color="#1a2a4a" transparent opacity={0.5} />
-        </mesh>
-      ))}
-      {[-20, 20].map((z) => (
-        <mesh key={`wz-${z}`} position={[0, 1, z]}>
-          <boxGeometry args={[42, 2, 0.2]} />
-          <meshBasicMaterial color="#1a2a4a" transparent opacity={0.5} />
-        </mesh>
-      ))}
+      {/* PointerLockControls for first-person mouse look (PC only) */}
+      {controlMode !== "mobile" && (
+        <PointerLockControls
+          ref={controlsRef}
+          makeDefault
+          onLock={() => {
+            isLockedRef.current = true;
+            onPointerLockChange?.(true);
+          }}
+          onUnlock={() => {
+            isLockedRef.current = false;
+            onPointerLockChange?.(false);
+          }}
+        />
+      )}
 
       {/* Obstacles */}
       <ObstacleCubes obstacles={obstacles} />
 
-      {/* Players */}
-      {players.map((player) => (
-        <PlayerCube key={player.id} player={player} />
-      ))}
+      {/* Bot characters (NOT local player — first-person) */}
+      {players
+        .filter((p) => !p.isLocal)
+        .map((player) => {
+          if (player.isBot) {
+            return (
+              <BotCharacter
+                key={player.id}
+                player={player}
+                botIndex={botIndexMap[player.id] ?? 0}
+              />
+            );
+          }
+          // Non-local human players — photo-in-a-box style with color front
+          return (
+            <group
+              key={player.id}
+              position={[
+                player.position.x,
+                player.position.y,
+                player.position.z,
+              ]}
+            >
+              <Billboard position={[0, 0.6, 0]}>
+                {/* Frame plane */}
+                <mesh scale={[1.15, 1.15, 1]}>
+                  <planeGeometry args={[1, 1]} />
+                  <meshStandardMaterial
+                    color={player.isIT ? "#ff2200" : "#111111"}
+                    emissive={player.isIT ? "#cc1100" : "#000000"}
+                    emissiveIntensity={player.isIT ? 0.6 : 0}
+                    roughness={0.5}
+                    metalness={0.6}
+                  />
+                </mesh>
+                {/* Color front plane */}
+                <mesh scale={[1.0, 1.0, 1]} position={[0, 0, 0.01]}>
+                  <planeGeometry args={[1, 1]} />
+                  <meshStandardMaterial
+                    color={player.isIT ? "#ff3a1a" : player.color}
+                    emissive={player.isIT ? "#cc2200" : player.color}
+                    emissiveIntensity={0.3}
+                    roughness={0.5}
+                  />
+                </mesh>
+              </Billboard>
+              <Billboard position={[0, 1.3, 0]}>
+                <Text
+                  fontSize={0.3}
+                  color={player.isIT ? "#ff6644" : "#ccffee"}
+                  anchorX="center"
+                  anchorY="middle"
+                  outlineWidth={0.04}
+                  outlineColor="#000000"
+                >
+                  {player.name}
+                  {player.isIT ? " 🔴" : ""}
+                </Text>
+              </Billboard>
+            </group>
+          );
+        })}
     </>
   );
 }

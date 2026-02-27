@@ -5,19 +5,22 @@ import {
   randomIntInRange,
 } from "./seededRandom";
 
+// Neon colors for 3D arena obstacles
 const OBSTACLE_COLORS = [
-  "#4a3728", // dark brown
-  "#5a4a3a", // medium brown
-  "#3d4a2e", // dark olive
-  "#4a5040", // muted green
-  "#5a5260", // slate gray
-  "#4a4a55", // blue-gray
-  "#6a5a4a", // tan
-  "#3a4a4a", // teal-gray
+  "#0a1f6e", // deep blue
+  "#1a0a5e", // deep purple
+  "#0a3a6e", // dark teal-blue
+  "#2a0a5e", // violet
+  "#0a4a5e", // dark cyan
+  "#3a0a6e", // indigo
+  "#0a2a4e", // navy
+  "#1a3a5e", // slate blue
+  "#0a5a6e", // dark teal
+  "#2a1a6e", // dark blue-purple
 ];
 
-const MAP_SIZE = 20; // -20 to 20
-const CLEAR_ZONE = 4; // Center clear zone radius
+const MAP_SIZE = 22; // -22 to 22
+const CLEAR_ZONE = 5; // Center clear zone radius
 
 function boxesOverlap(
   pos1: Vec3,
@@ -35,27 +38,39 @@ function boxesOverlap(
 export function generateMap(seed: number): ObstacleBox[] {
   const rng = createSeededRandom(seed);
   const obstacles: ObstacleBox[] = [];
-  const count = randomIntInRange(rng, 35, 50);
 
-  for (let i = 0; i < count * 5 && obstacles.length < count; i++) {
-    const sizeX = randomInRange(rng, 1, 3.5);
-    const sizeY = randomInRange(rng, 0.8, 3);
-    const sizeZ = randomInRange(rng, 1, 3.5);
+  const colorPick = () =>
+    OBSTACLE_COLORS[Math.floor(rng() * OBSTACLE_COLORS.length)];
 
-    const posX = randomInRange(rng, -(MAP_SIZE - 2), MAP_SIZE - 2);
-    const posZ = randomInRange(rng, -(MAP_SIZE - 2), MAP_SIZE - 2);
+  // ─── Long corridor walls ──────────────────────────────────────────────────
+  const corridorCount = randomIntInRange(rng, 8, 12);
+  for (
+    let i = 0;
+    i < corridorCount * 6 &&
+    obstacles.filter((o) => o.id.startsWith("corridor")).length < corridorCount;
+    i++
+  ) {
+    const isHorizontal = rng() > 0.5;
+    const length = randomInRange(rng, 6, 14);
+    const height = randomInRange(rng, 3, 5);
+    const width = randomInRange(rng, 0.5, 1.2);
+
+    const sizeX = isHorizontal ? length : width;
+    const sizeZ = isHorizontal ? width : length;
+    const sizeY = height;
+
+    const posX = randomInRange(rng, -(MAP_SIZE - 3), MAP_SIZE - 3);
+    const posZ = randomInRange(rng, -(MAP_SIZE - 3), MAP_SIZE - 3);
     const posY = sizeY / 2;
 
     const size: Vec3 = { x: sizeX, y: sizeY, z: sizeZ };
     const pos: Vec3 = { x: posX, y: posY, z: posZ };
 
-    // Skip if in clear zone
     if (Math.abs(posX) < CLEAR_ZONE && Math.abs(posZ) < CLEAR_ZONE) continue;
 
-    // Check overlaps with existing obstacles
     let overlaps = false;
     for (const obs of obstacles) {
-      if (boxesOverlap(pos, size, obs.position, obs.size)) {
+      if (boxesOverlap(pos, size, obs.position, obs.size, 1.0)) {
         overlaps = true;
         break;
       }
@@ -63,12 +78,167 @@ export function generateMap(seed: number): ObstacleBox[] {
     if (overlaps) continue;
 
     obstacles.push({
-      id: `obs-${i}`,
+      id: `corridor-${i}`,
       position: pos,
       size,
-      color: OBSTACLE_COLORS[Math.floor(rng() * OBSTACLE_COLORS.length)],
+      color: colorPick(),
     });
   }
+
+  // ─── Pillar clusters ──────────────────────────────────────────────────────
+  const pillarGroupCount = randomIntInRange(rng, 3, 5);
+  for (let g = 0; g < pillarGroupCount; g++) {
+    const centerX = randomInRange(rng, -16, 16);
+    const centerZ = randomInRange(rng, -16, 16);
+    if (Math.abs(centerX) < CLEAR_ZONE && Math.abs(centerZ) < CLEAR_ZONE)
+      continue;
+
+    const pillarCount = randomIntInRange(rng, 3, 6);
+    for (let p = 0; p < pillarCount; p++) {
+      const px = centerX + randomInRange(rng, -4, 4);
+      const pz = centerZ + randomInRange(rng, -4, 4);
+      const height = randomInRange(rng, 2.5, 5);
+      const w = randomInRange(rng, 0.8, 1.8);
+
+      const size: Vec3 = { x: w, y: height, z: w };
+      const pos: Vec3 = { x: px, y: height / 2, z: pz };
+
+      if (Math.abs(px) < CLEAR_ZONE && Math.abs(pz) < CLEAR_ZONE) continue;
+
+      let overlaps = false;
+      for (const obs of obstacles) {
+        if (boxesOverlap(pos, size, obs.position, obs.size, 0.5)) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (overlaps) continue;
+
+      obstacles.push({
+        id: `pillar-${g}-${p}`,
+        position: pos,
+        size,
+        color: colorPick(),
+      });
+    }
+  }
+
+  // ─── L-shaped walls (two boxes forming an L) ─────────────────────────────
+  const lWallCount = randomIntInRange(rng, 4, 7);
+  for (let l = 0; l < lWallCount; l++) {
+    const baseX = randomInRange(rng, -(MAP_SIZE - 4), MAP_SIZE - 4);
+    const baseZ = randomInRange(rng, -(MAP_SIZE - 4), MAP_SIZE - 4);
+    if (Math.abs(baseX) < CLEAR_ZONE && Math.abs(baseZ) < CLEAR_ZONE) continue;
+
+    const height = randomInRange(rng, 3, 5);
+    const armLen = randomInRange(rng, 4, 8);
+    const thickness = randomInRange(rng, 0.6, 1.2);
+    const col = colorPick();
+
+    // Arm 1 (horizontal)
+    const s1: Vec3 = { x: armLen, y: height, z: thickness };
+    const p1: Vec3 = { x: baseX, y: height / 2, z: baseZ };
+
+    // Arm 2 (vertical, attached at end)
+    const arm2Len = randomInRange(rng, 3, 6);
+    const s2: Vec3 = { x: thickness, y: height, z: arm2Len };
+    const p2: Vec3 = {
+      x: baseX + armLen / 2,
+      y: height / 2,
+      z: baseZ + arm2Len / 2,
+    };
+
+    let ok = true;
+    for (const obs of obstacles) {
+      if (
+        boxesOverlap(p1, s1, obs.position, obs.size, 0.5) ||
+        boxesOverlap(p2, s2, obs.position, obs.size, 0.5)
+      ) {
+        ok = false;
+        break;
+      }
+    }
+    if (!ok) continue;
+
+    obstacles.push({ id: `lwall-${l}-a`, position: p1, size: s1, color: col });
+    obstacles.push({ id: `lwall-${l}-b`, position: p2, size: s2, color: col });
+  }
+
+  // ─── Wonky tilted blocks ──────────────────────────────────────────────────
+  const wonkyCount = randomIntInRange(rng, 6, 10);
+  for (
+    let w = 0;
+    w < wonkyCount * 4 &&
+    obstacles.filter((o) => o.id.startsWith("wonky")).length < wonkyCount;
+    w++
+  ) {
+    const sizeX = randomInRange(rng, 1.5, 4);
+    const sizeY = randomInRange(rng, 1.5, 4);
+    const sizeZ = randomInRange(rng, 1.5, 4);
+    const posX = randomInRange(rng, -(MAP_SIZE - 3), MAP_SIZE - 3);
+    const posZ = randomInRange(rng, -(MAP_SIZE - 3), MAP_SIZE - 3);
+    const posY = sizeY / 2;
+
+    // Random tilt angle (wonky)
+    const rotY = randomInRange(rng, 0, Math.PI * 2);
+    const rotX = randomInRange(rng, -0.3, 0.3); // slight tilt
+    const rotZ = randomInRange(rng, -0.3, 0.3);
+
+    const size: Vec3 = { x: sizeX, y: sizeY, z: sizeZ };
+    const pos: Vec3 = { x: posX, y: posY, z: posZ };
+
+    if (Math.abs(posX) < CLEAR_ZONE && Math.abs(posZ) < CLEAR_ZONE) continue;
+
+    let overlaps = false;
+    for (const obs of obstacles) {
+      if (boxesOverlap(pos, size, obs.position, obs.size, 0.8)) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (overlaps) continue;
+
+    obstacles.push({
+      id: `wonky-${w}`,
+      position: pos,
+      size,
+      color: colorPick(),
+      rotation: { x: rotX, y: rotY, z: rotZ },
+    });
+  }
+
+  // ─── Boundary walls ───────────────────────────────────────────────────────
+  // Add thick boundary walls at the edges for a real arena feel
+  const boundaryHeight = 5;
+  const boundaryThickness = 1.5;
+  [
+    {
+      id: "bound-n",
+      pos: { x: 0, y: boundaryHeight / 2, z: -MAP_SIZE },
+      size: { x: MAP_SIZE * 2, y: boundaryHeight, z: boundaryThickness },
+      col: colorPick(),
+    },
+    {
+      id: "bound-s",
+      pos: { x: 0, y: boundaryHeight / 2, z: MAP_SIZE },
+      size: { x: MAP_SIZE * 2, y: boundaryHeight, z: boundaryThickness },
+      col: colorPick(),
+    },
+    {
+      id: "bound-w",
+      pos: { x: -MAP_SIZE, y: boundaryHeight / 2, z: 0 },
+      size: { x: boundaryThickness, y: boundaryHeight, z: MAP_SIZE * 2 },
+      col: colorPick(),
+    },
+    {
+      id: "bound-e",
+      pos: { x: MAP_SIZE, y: boundaryHeight / 2, z: 0 },
+      size: { x: boundaryThickness, y: boundaryHeight, z: MAP_SIZE * 2 },
+      col: colorPick(),
+    },
+  ].map(({ id, pos, size, col }) => {
+    obstacles.push({ id, position: pos, size, color: col });
+  });
 
   return obstacles;
 }

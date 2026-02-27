@@ -69,30 +69,40 @@ export default function App() {
   const [winners, setWinners] = useState<string[]>([]);
   const [finalPlayers, setFinalPlayers] = useState<PlayerState[]>([]);
   const [mapType, setMapType] = useState<"3d" | "2d-platformer">("3d");
+  const [controlMode, setControlMode] = useState<"pc" | "mobile">("pc");
+  const [gameDuration, setGameDuration] = useState(100);
 
-  const handleCreateRoom = useCallback((name: string) => {
-    const code = generateRoomCode();
-    const players = createInitialPlayers(name);
-    setPlayerName(name);
-    setRoomCode(code);
-    setIsHost(true);
-    setLobbyPlayers(players);
-    setScreen("lobby");
-  }, []);
+  const handleCreateRoom = useCallback(
+    (name: string, mode: "pc" | "mobile") => {
+      const code = generateRoomCode();
+      const players = createInitialPlayers(name);
+      setPlayerName(name);
+      setRoomCode(code);
+      setIsHost(true);
+      setLobbyPlayers(players);
+      setControlMode(mode);
+      setScreen("lobby");
+    },
+    [],
+  );
 
-  const handleJoinRoom = useCallback((name: string, code: string) => {
-    const players = createInitialPlayers(name);
-    setPlayerName(name);
-    setRoomCode(code);
-    setIsHost(false);
-    setLobbyPlayers(players);
-    setScreen("lobby");
-  }, []);
+  const handleJoinRoom = useCallback(
+    (name: string, code: string, mode: "pc" | "mobile") => {
+      const players = createInitialPlayers(name);
+      setPlayerName(name);
+      setRoomCode(code);
+      setIsHost(false);
+      setLobbyPlayers(players);
+      setControlMode(mode);
+      setScreen("lobby");
+    },
+    [],
+  );
 
   const handleStartGame = useCallback(() => {
     const seed = Math.floor(Math.random() * 999999);
     const type: "3d" | "2d-platformer" =
-      Math.random() < 0.5 ? "2d-platformer" : "3d";
+      Math.random() < 0.3 ? "2d-platformer" : "3d";
     setMapType(type);
 
     const newObstacles =
@@ -141,6 +151,7 @@ export default function App() {
     setLobbyPlayers([]);
     setGamePlayers([]);
     setWinners([]);
+    setControlMode("pc");
   }, []);
 
   // Kick handlers
@@ -170,6 +181,8 @@ export default function App() {
           onLeave={handleHome}
           onKickPlayer={handleKickLobbyPlayer}
           mapType={mapType}
+          gameDuration={gameDuration}
+          onDurationChange={setGameDuration}
         />
       )}
       {screen === "game" && gamePlayers.length > 0 && (
@@ -180,6 +193,8 @@ export default function App() {
           isHost={isHost}
           onKickPlayer={handleKickGamePlayer}
           mapType={mapType}
+          controlMode={controlMode}
+          gameDuration={gameDuration}
         />
       )}
       {screen === "end" && (
