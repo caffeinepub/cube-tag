@@ -46,7 +46,7 @@ export function LobbyScreen({
         : "RANDOM";
 
   return (
-    <div className="relative min-h-screen w-full bg-game-deep overflow-hidden flex items-center justify-center scanlines">
+    <div className="relative min-h-screen w-full bg-game-deep flex items-center justify-center scanlines">
       <div className="absolute inset-0 grid-bg opacity-40" />
 
       <motion.div

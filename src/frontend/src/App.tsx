@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { EndScreen } from "./components/EndScreen";
 import { GameScreen } from "./components/GameScreen";
 import { HomeScreen } from "./components/HomeScreen";
@@ -74,6 +74,18 @@ export default function App() {
   >("random");
   const [controlMode, setControlMode] = useState<"pc" | "mobile">("pc");
   const [gameDuration, setGameDuration] = useState(100);
+
+  // Lock scrolling during gameplay, allow it on menus
+  useEffect(() => {
+    if (screen === "game") {
+      document.body.classList.add("game-active");
+    } else {
+      document.body.classList.remove("game-active");
+    }
+    return () => {
+      document.body.classList.remove("game-active");
+    };
+  }, [screen]);
 
   const handleCreateRoom = useCallback(
     (name: string, mode: "pc" | "mobile") => {

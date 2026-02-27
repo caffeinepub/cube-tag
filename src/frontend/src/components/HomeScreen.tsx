@@ -122,7 +122,7 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-game-deep overflow-hidden flex items-center justify-center scanlines">
+    <div className="relative min-h-screen w-full bg-game-deep flex items-center justify-center scanlines">
       {/* Animated grid background */}
       <div className="absolute inset-0 grid-bg opacity-60" />
 

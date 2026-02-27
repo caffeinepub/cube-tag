@@ -84,6 +84,9 @@
     @apply bg-background text-foreground;
     font-family: "Outfit", sans-serif;
     background: oklch(0.08 0.02 260);
+  }
+
+  body.game-active {
     overflow: hidden;
   }
 }
