@@ -6,12 +6,19 @@ const MAP_BOUND = 21;
 const TAG_DISTANCE = 1.8;
 const PLAYER_SPEED = 6;
 const BOT_NORMAL_SPEED = 6;
-const IT_SPEED_BONUS = 6.9; // IT is ~15% faster than normal
+const IT_SPEED_BONUS = 7.5; // Faster than before so IT can actually close the gap
 const GRAVITY = 15;
 const JUMP_VELOCITY = 9;
-const BOT_JUMP_VELOCITY = 13; // bots jump higher so they can reach 2D platformer ledges
+const BOT_JUMP_VELOCITY = 13;
 const PLAYER_HALF_HEIGHT = 0.5;
 const TAG_IMMUNITY_DURATION = 3.0;
+
+// How long a bot sticks with the same target before randomly re-evaluating
+const BOT_TARGET_SWITCH_MIN = 2.5;
+const BOT_TARGET_SWITCH_MAX = 5.0;
+
+// Predictive lead: how many seconds ahead to aim when chasing
+const LEAD_TIME = 0.6;
 
 function clamp(val: number, min: number, max: number) {
   return Math.max(min, Math.min(max, val));
@@ -45,9 +52,7 @@ function resolvePlatformerY(
   for (const obs of obstacles) {
     const ledgeTop = obs.position.y + obs.size.y / 2;
     const halfWidth = obs.size.x / 2 + 0.3;
-
     if (Math.abs(posX - obs.position.x) > halfWidth) continue;
-
     if (prevBottomY >= ledgeTop - 0.01 && newBottomY <= ledgeTop) {
       return { landedY: ledgeTop + PLAYER_HALF_HEIGHT, onGround: true };
     }
@@ -61,18 +66,54 @@ export interface GameLoopRefs {
   obstaclesRef: React.MutableRefObject<ObstacleBox[]>;
 }
 
-/** Bot jump timer ref: map of botId -> time until next jump */
+// ── Per-bot persistent state maps ────────────────────────────────────────────
 const botJumpTimers: Record<string, number> = {};
-
-/** Bot stuck timer: tracks how long each bot has been nearly stationary */
 const botStuckTimers: Record<string, number> = {};
 const botLastPos: Record<string, Vec3> = {};
 const botRandomDirTimers: Record<string, number> = {};
 const botRandomDirs: Record<string, { dx: number; dz: number }> = {};
 
+// Smart AI state: which target each bot is chasing and for how long
+const botTargetId: Record<string, string | null> = {};
+const botTargetTimer: Record<string, number> = {};
+
+// Per-player velocity for predictive lead when chasing them
+const playerPrevPos: Record<string, Vec3> = {};
+const playerVelocity: Record<string, { vx: number; vz: number }> = {};
+
+/** Weighted-random target selection.
+ *  Bots prefer closer targets slightly but randomise enough to spread.
+ *  Ignores immune targets. Returns null if no valid target.
+ */
+function pickRandomTarget(
+  botPos: Vec3,
+  candidates: PlayerState[],
+  currentTargetId: string | null,
+): PlayerState | null {
+  const valid = candidates.filter((p) => (p.tagImmunityTimer ?? 0) <= 0);
+  if (valid.length === 0) return null;
+
+  // Weight = 1 / (distance + 3) so near targets are slightly more likely
+  // but not so overwhelmingly that it always picks the nearest
+  const weights = valid.map((p) => {
+    const d = distance(botPos, p.position);
+    // Bias slightly away from the current target to encourage switching
+    const samePenalty = p.id === currentTargetId ? 0.5 : 1.0;
+    return (1 / (d + 3)) * samePenalty;
+  });
+
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let rand = Math.random() * totalWeight;
+  for (let i = 0; i < valid.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) return valid[i];
+  }
+  return valid[valid.length - 1];
+}
+
 /**
- * Improved bot navigation: try 8 directions and pick the one that
- * moves the bot most toward the target.
+ * Improved bot navigation with predictive lead.
+ * Tries 16 directions and picks the best navigable one.
  */
 function findBestBotDirection(
   botPos: Vec3,
@@ -82,17 +123,16 @@ function findBestBotDirection(
   obstacles: ObstacleBox[],
   isChasing: boolean,
 ): { dx: number; dz: number } {
-  // Desired direction toward (or away from) target
   let desiredX = isChasing ? targetPos.x - botPos.x : botPos.x - targetPos.x;
   let desiredZ = isChasing ? targetPos.z - botPos.z : botPos.z - targetPos.z;
 
   const { dx: baseDx, dz: baseDz } = normalize(desiredX, desiredZ);
 
-  // Try 8 directions: start with desired direction, then rotate by 45° increments
+  const NUM_DIRS = 16;
   const candidates: { dx: number; dz: number; score: number }[] = [];
-  for (let i = 0; i < 8; i++) {
-    const angle = (i * Math.PI) / 4;
-    // Rotate the base direction by angle
+
+  for (let i = 0; i < NUM_DIRS; i++) {
+    const angle = (i * Math.PI * 2) / NUM_DIRS;
     const rdx = baseDx * Math.cos(angle) - baseDz * Math.sin(angle);
     const rdz = baseDx * Math.sin(angle) + baseDz * Math.cos(angle);
 
@@ -106,31 +146,35 @@ function findBestBotDirection(
 
     if (blocked) continue;
 
-    // Score = how close to target (or far from target if fleeing)
     const newDist = distance(resolvedPos, targetPos);
     const score = isChasing ? -newDist : newDist;
-
     candidates.push({ dx: rdx, dz: rdz, score });
   }
 
   if (candidates.length === 0) {
-    // Completely stuck — return a random direction
     const angle = Math.random() * Math.PI * 2;
     return { dx: Math.cos(angle), dz: Math.sin(angle) };
   }
 
-  // Pick the best scoring candidate
   candidates.sort((a, b) => b.score - a.score);
   return { dx: candidates[0].dx, dz: candidates[0].dz };
+}
+
+/** Returns a predicted future position for a target based on their velocity */
+function predictTargetPos(target: PlayerState, leadTime: number): Vec3 {
+  const vel = playerVelocity[target.id] ?? { vx: 0, vz: 0 };
+  return {
+    x: target.position.x + vel.vx * leadTime,
+    y: target.position.y,
+    z: target.position.z + vel.vz * leadTime,
+  };
 }
 
 export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
   const playersRef = useRef<PlayerState[]>([]);
   const keysRef = useRef<Set<string>>(new Set());
   const obstaclesRef = useRef<ObstacleBox[]>([]);
-  // cameraRef: will be set by Scene to the Three.js camera for reading yaw
   const cameraRef = useRef<{ rotation: { y: number } } | null>(null);
-  // mouseDeltaRef: Scene writes mouse movement, game loop reads it
   const mouseDeltaRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const updateFrame = useCallback(
@@ -144,9 +188,20 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
       const localPlayer = players.find((p) => p.isLocal);
       if (!localPlayer) return;
 
+      // ── Update player velocity estimates for predictive lead ──────────────
+      for (const p of players) {
+        const prev = playerPrevPos[p.id];
+        if (prev) {
+          playerVelocity[p.id] = {
+            vx: (p.position.x - prev.x) / delta,
+            vz: (p.position.z - prev.z) / delta,
+          };
+        }
+        playerPrevPos[p.id] = { ...p.position };
+      }
+
       if (mapType === "2d-platformer") {
-        // ── 2D PLATFORMER FIRST-PERSON MODE ─────────────────────────────────
-        // Local player moves left/right (A/D) relative to their yaw, plus jump (Space/W)
+        // ── 2D PLATFORMER ────────────────────────────────────────────────────
         const currentYaw2D =
           cameraRef.current?.rotation.y ?? localPlayer.yaw ?? 0;
 
@@ -156,7 +211,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
 
           let velY = player.velocityY ?? 0;
           let onGround = player.onGround ?? false;
-
           let moveX = 0;
           let moveZ = 0;
 
@@ -168,7 +222,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             if (keys.has("ArrowDown") || keys.has("KeyS")) forwardInput -= 1;
             if (keys.has("ArrowUp") || keys.has("KeyW")) forwardInput += 1;
 
-            // Yaw-relative horizontal movement
             const fwdX2 = -Math.sin(currentYaw2D);
             const fwdZ2 = -Math.cos(currentYaw2D);
             const srtX2 = Math.cos(currentYaw2D);
@@ -183,25 +236,35 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           } else if (isBot) {
             const itPlayer = players.find((p) => p.isIT);
             if (player.isIT) {
+              // 2D chase: pick random target via weighted selection
               const targets = players.filter((p) => !p.isIT);
-              if (targets.length > 0) {
-                let nearest = targets[0];
-                let nearestDist = distance2D(
-                  player.position,
-                  targets[0].position,
+              const validTargets = targets.filter(
+                (p) => (p.tagImmunityTimer ?? 0) <= 0,
+              );
+              if (validTargets.length > 0) {
+                let chosen = validTargets[0];
+                // Weighted random pick
+                const weights = validTargets.map(
+                  (p) => 1 / (Math.abs(p.position.x - player.position.x) + 2),
                 );
-                for (const t of targets) {
-                  const d = distance2D(player.position, t.position);
-                  if (d < nearestDist) {
-                    nearestDist = d;
-                    nearest = t;
+                const total = weights.reduce((a, b) => a + b, 0);
+                let r = Math.random() * total;
+                for (let i = 0; i < validTargets.length; i++) {
+                  r -= weights[i];
+                  if (r <= 0) {
+                    chosen = validTargets[i];
+                    break;
                   }
                 }
-                // chase: move toward nearest target on X axis
-                moveX = nearest.position.x > player.position.x ? 1 : -1;
+                moveX = chosen.position.x > player.position.x ? 1 : -1;
+              } else {
+                // All immune — wander
+                moveX =
+                  Math.sin(Date.now() * 0.001 + Number(player.id.slice(-1))) > 0
+                    ? 1
+                    : -1;
               }
             } else if (itPlayer) {
-              // flee: move away from IT on X axis
               moveX = player.position.x > itPlayer.position.x ? 1 : -1;
             }
 
@@ -259,7 +322,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             }
           }
 
-          // Countdown tag immunity
           const newImmunity = Math.max(
             0,
             (player.tagImmunityTimer ?? 0) - delta,
@@ -274,7 +336,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         });
 
-        // Tag detection (2D distance)
         const currentIT = updatedPlayers.find((p) => p.isIT);
         if (!currentIT) {
           playersRef.current = updatedPlayers;
@@ -309,10 +370,8 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
 
       // ── 3D FIRST-PERSON MODE ─────────────────────────────────────────────
 
-      // Get yaw from camera (set by Scene's PointerLockControls)
       const currentYaw = cameraRef.current?.rotation.y ?? localPlayer.yaw ?? 0;
 
-      // First-person WASD movement relative to yaw
       let forwardInput = 0;
       let strafeInput = 0;
 
@@ -321,11 +380,8 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
       if (keys.has("ArrowLeft") || keys.has("KeyA")) strafeInput -= 1;
       if (keys.has("ArrowRight") || keys.has("KeyD")) strafeInput += 1;
 
-      // Convert to world-space movement using yaw
-      // Forward direction: (-sin(yaw), 0, -cos(yaw)) in Three.js coords
       const fwdX = -Math.sin(currentYaw);
       const fwdZ = -Math.cos(currentYaw);
-      // Strafe right: perpendicular
       const strafeX = Math.cos(currentYaw);
       const strafeZ = -Math.sin(currentYaw);
 
@@ -351,7 +407,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
       );
       localResolved.y = 0.5;
 
-      // --- Move bots with improved wall avoidance ---
       const itPlayer = players.find((p) => p.isIT);
 
       const updatedPlayers = players.map((player) => {
@@ -379,27 +434,64 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
         const speed = player.isIT ? IT_SPEED_BONUS : BOT_NORMAL_SPEED;
         const newImmunity = Math.max(0, (player.tagImmunityTimer ?? 0) - delta);
 
-        // Determine target position
+        // ── Determine target ────────────────────────────────────────────────
         let targetPos: Vec3;
         let isChasing: boolean;
 
         if (player.isIT) {
-          // Chase nearest non-IT player
-          const targets = players.filter((p) => !p.isIT);
-          if (targets.length === 0) {
-            return { ...player, tagImmunityTimer: newImmunity };
-          }
-          let nearest = targets[0];
-          let nearestDist = distance(player.position, targets[0].position);
-          for (const t of targets) {
-            const d = distance(player.position, t.position);
-            if (d < nearestDist) {
-              nearestDist = d;
-              nearest = t;
+          // Non-IT targets that are not immune
+          const chaseable = players.filter(
+            (p) => !p.isIT && (p.tagImmunityTimer ?? 0) <= 0,
+          );
+
+          if (chaseable.length === 0) {
+            // All targets immune — wander toward center with a slight random wobble
+            const wanderAngle =
+              Date.now() * 0.0008 + Number(player.id.replace(/\D/g, "")) * 1.3;
+            const wanderRadius = 6;
+            targetPos = {
+              x: Math.cos(wanderAngle) * wanderRadius,
+              y: 0.5,
+              z: Math.sin(wanderAngle) * wanderRadius,
+            };
+            isChasing = true;
+          } else {
+            // Validate persisted target
+            const persistedId = botTargetId[player.id];
+            const persistedTarget = persistedId
+              ? chaseable.find((p) => p.id === persistedId)
+              : null;
+
+            const timerExpired = (botTargetTimer[player.id] ?? 0) <= 0;
+            const needNewTarget = !persistedTarget || timerExpired;
+
+            if (needNewTarget) {
+              // Pick a weighted-random new target
+              const picked = pickRandomTarget(
+                player.position,
+                chaseable,
+                persistedId ?? null,
+              );
+              if (picked) {
+                botTargetId[player.id] = picked.id;
+                botTargetTimer[player.id] =
+                  BOT_TARGET_SWITCH_MIN +
+                  Math.random() *
+                    (BOT_TARGET_SWITCH_MAX - BOT_TARGET_SWITCH_MIN);
+              }
+            } else {
+              // Tick down the timer
+              botTargetTimer[player.id] -= delta;
             }
+
+            const chosenTarget =
+              chaseable.find((p) => p.id === botTargetId[player.id]) ??
+              chaseable[0];
+
+            // Predictive lead: aim slightly ahead of where target is moving
+            targetPos = predictTargetPos(chosenTarget, LEAD_TIME);
+            isChasing = true;
           }
-          targetPos = nearest.position;
-          isChasing = true;
         } else {
           // Flee from IT
           if (!itPlayer) {
@@ -407,9 +499,13 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           }
           targetPos = itPlayer.position;
           isChasing = false;
+
+          // Clear stored chase target when not IT
+          botTargetId[player.id] = null;
+          botTargetTimer[player.id] = 0;
         }
 
-        // Check if bot is stuck
+        // ── Stuck detection ─────────────────────────────────────────────────
         const lastPos = botLastPos[player.id];
         if (!lastPos) {
           botLastPos[player.id] = { ...player.position };
@@ -417,7 +513,6 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
         } else {
           const moved = distance(player.position, lastPos);
           if (moved < 0.05 * delta * 60) {
-            // Barely moved
             botStuckTimers[player.id] =
               (botStuckTimers[player.id] ?? 0) + delta;
           } else {
@@ -426,7 +521,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           botLastPos[player.id] = { ...player.position };
         }
 
-        // Check if in random direction mode (unstuck)
+        // Random direction escape when stuck
         if (botRandomDirTimers[player.id] > 0) {
           botRandomDirTimers[player.id] -= delta;
           const rd = botRandomDirs[player.id] ?? { dx: 1, dz: 0 };
@@ -452,10 +547,11 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         }
 
-        // If stuck for > 0.8s, start random direction for 0.5s
-        if ((botStuckTimers[player.id] ?? 0) > 0.8) {
+        if ((botStuckTimers[player.id] ?? 0) > 0.6) {
           botStuckTimers[player.id] = 0;
-          botRandomDirTimers[player.id] = 0.5;
+          botRandomDirTimers[player.id] = 0.6;
+          // Force a new target pick next time
+          botTargetTimer[player.id] = 0;
           const angle = Math.random() * Math.PI * 2;
           botRandomDirs[player.id] = {
             dx: Math.cos(angle),
@@ -463,7 +559,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         }
 
-        // Find best direction navigating around walls
+        // ── Find best movement direction ─────────────────────────────────────
         const bestDir = findBestBotDirection(
           player.position,
           targetPos,
@@ -496,7 +592,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
         };
       });
 
-      // --- Tag detection ---
+      // ── Tag detection ─────────────────────────────────────────────────────
       const currentIT = updatedPlayers.find((p) => p.isIT);
       if (!currentIT) {
         playersRef.current = updatedPlayers;
@@ -511,6 +607,11 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
       );
       for (const target of nonITPlayers) {
         if (distance(currentIT.position, target.position) < TAG_DISTANCE) {
+          // Invalidate the IT bot's target so it picks a new one next frame
+          if (currentIT.isBot) {
+            botTargetId[currentIT.id] = null;
+            botTargetTimer[currentIT.id] = 0;
+          }
           finalPlayers = updatedPlayers.map((p) => {
             if (p.id === currentIT.id) {
               return {
