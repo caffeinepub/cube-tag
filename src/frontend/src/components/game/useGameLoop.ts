@@ -9,6 +9,7 @@ const BOT_NORMAL_SPEED = 6;
 const IT_SPEED_BONUS = 6.9; // IT is ~15% faster than normal
 const GRAVITY = 15;
 const JUMP_VELOCITY = 9;
+const BOT_JUMP_VELOCITY = 13; // bots jump higher so they can reach 2D platformer ledges
 const PLAYER_HALF_HEIGHT = 0.5;
 const TAG_IMMUNITY_DURATION = 3.0;
 
@@ -209,7 +210,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             }
             botJumpTimers[player.id] -= delta;
             if (botJumpTimers[player.id] <= 0 && onGround) {
-              velY = JUMP_VELOCITY;
+              velY = BOT_JUMP_VELOCITY;
               onGround = false;
               botJumpTimers[player.id] = 1 + Math.random();
             }
