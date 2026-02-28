@@ -19,8 +19,8 @@ const OBSTACLE_COLORS = [
   "#2a1a6e", // dark blue-purple
 ];
 
-const MAP_SIZE = 22; // -22 to 22
-const CLEAR_ZONE = 5; // Center clear zone radius
+const MAP_SIZE = 32; // -32 to 32
+const CLEAR_ZONE = 6; // Center clear zone radius
 
 function boxesOverlap(
   pos1: Vec3,
@@ -43,7 +43,7 @@ export function generateMap(seed: number): ObstacleBox[] {
     OBSTACLE_COLORS[Math.floor(rng() * OBSTACLE_COLORS.length)];
 
   // ─── Long corridor walls ──────────────────────────────────────────────────
-  const corridorCount = randomIntInRange(rng, 8, 12);
+  const corridorCount = randomIntInRange(rng, 10, 16);
   for (
     let i = 0;
     i < corridorCount * 6 &&
@@ -86,10 +86,10 @@ export function generateMap(seed: number): ObstacleBox[] {
   }
 
   // ─── Pillar clusters ──────────────────────────────────────────────────────
-  const pillarGroupCount = randomIntInRange(rng, 3, 5);
+  const pillarGroupCount = randomIntInRange(rng, 4, 8);
   for (let g = 0; g < pillarGroupCount; g++) {
-    const centerX = randomInRange(rng, -16, 16);
-    const centerZ = randomInRange(rng, -16, 16);
+    const centerX = randomInRange(rng, -26, 26);
+    const centerZ = randomInRange(rng, -26, 26);
     if (Math.abs(centerX) < CLEAR_ZONE && Math.abs(centerZ) < CLEAR_ZONE)
       continue;
 
@@ -124,7 +124,7 @@ export function generateMap(seed: number): ObstacleBox[] {
   }
 
   // ─── L-shaped walls (two boxes forming an L) ─────────────────────────────
-  const lWallCount = randomIntInRange(rng, 4, 7);
+  const lWallCount = randomIntInRange(rng, 6, 10);
   for (let l = 0; l < lWallCount; l++) {
     const baseX = randomInRange(rng, -(MAP_SIZE - 4), MAP_SIZE - 4);
     const baseZ = randomInRange(rng, -(MAP_SIZE - 4), MAP_SIZE - 4);
@@ -165,7 +165,7 @@ export function generateMap(seed: number): ObstacleBox[] {
   }
 
   // ─── Wonky tilted blocks ──────────────────────────────────────────────────
-  const wonkyCount = randomIntInRange(rng, 6, 10);
+  const wonkyCount = randomIntInRange(rng, 8, 14);
   for (
     let w = 0;
     w < wonkyCount * 4 &&
@@ -258,35 +258,83 @@ export function generatePlatformerMap(seed: number): ObstacleBox[] {
   const rng = createSeededRandom(seed);
   const obstacles: ObstacleBox[] = [];
 
-  // Ground floor platform
+  // Wide ground floor platform
   obstacles.push({
     id: "platform-ground",
     position: { x: 0, y: 0.2, z: 0 },
-    size: { x: 40, y: 0.4, z: 2 },
+    size: { x: 45, y: 0.4, z: 2 },
     color: "#2a1f4a",
   });
 
-  // Generate floating ledges
-  const count = randomIntInRange(rng, 10, 16);
-  for (let i = 0; i < count; i++) {
-    const width = randomInRange(rng, 3, 8);
-    const height = 0.4;
-    const depth = 2;
+  // Structured column-based layout: 9 columns spanning x = -22 to 22
+  const COLUMNS = 9;
+  const X_MIN = -22;
+  const X_MAX = 22;
+  const COL_WIDTH = (X_MAX - X_MIN) / COLUMNS; // ~4.89 units wide
+  const LEDGE_HEIGHT = 0.4;
+  const LEDGE_DEPTH = 2;
+  const MIN_VERTICAL_GAP = 2.5;
+  const HEIGHT_MIN = 1.5;
+  const HEIGHT_MAX = 14;
 
-    const posX = randomInRange(rng, -14, 14);
-    // Top surface Y ranges from 1.5 to 10
-    const topY = randomInRange(rng, 1.5, 10);
-    // Center Y = topY - height/2
-    const posY = topY - height / 2;
+  let platformIdx = 0;
 
-    const colorIdx = Math.floor(rng() * PLATFORMER_COLORS.length);
+  for (let col = 0; col < COLUMNS; col++) {
+    const centerX = X_MIN + col * COL_WIDTH + COL_WIDTH / 2;
 
-    obstacles.push({
-      id: `platform-${i}`,
-      position: { x: posX, y: posY, z: 0 },
-      size: { x: width, y: height, z: depth },
-      color: PLATFORMER_COLORS[colorIdx],
-    });
+    // Place 2 ledges per column at staggered heights
+    let lastTopY: number | null = null;
+
+    for (let ledge = 0; ledge < 2; ledge++) {
+      // Determine height tier for this ledge (stagger: first ledge lower, second higher)
+      const tierMin =
+        ledge === 0
+          ? HEIGHT_MIN
+          : Math.min(HEIGHT_MIN + MIN_VERTICAL_GAP * 2, HEIGHT_MAX - 3);
+      const tierMax = ledge === 0 ? HEIGHT_MAX * 0.55 : HEIGHT_MAX;
+
+      let topY = randomInRange(rng, tierMin, tierMax);
+
+      // Ensure minimum vertical gap from the previous ledge in this column
+      if (lastTopY !== null) {
+        const gap = Math.abs(topY - lastTopY);
+        if (gap < MIN_VERTICAL_GAP) {
+          topY = lastTopY + MIN_VERTICAL_GAP + randomInRange(rng, 0, 1.5);
+        }
+      }
+      topY = Math.min(topY, HEIGHT_MAX);
+
+      // Width based on height tier: lower = wider, higher = narrower
+      let width: number;
+      if (topY < 5) {
+        // Lower ledges: wide (4–8 units)
+        width = randomInRange(rng, 4, 8);
+      } else if (topY > 8) {
+        // Higher ledges: narrow (2–4.5 units)
+        width = randomInRange(rng, 2, 4.5);
+      } else {
+        // Mid-range: medium (3–6 units)
+        width = randomInRange(rng, 3, 6);
+      }
+
+      // X offset within column: up to ±30% of column width
+      const xOffset = randomInRange(rng, -COL_WIDTH * 0.3, COL_WIDTH * 0.3);
+      const posX = centerX + xOffset;
+
+      // Center Y = topY - half the ledge height
+      const posY = topY - LEDGE_HEIGHT / 2;
+
+      const colorIdx = Math.floor(rng() * PLATFORMER_COLORS.length);
+
+      obstacles.push({
+        id: `platform-${platformIdx++}`,
+        position: { x: posX, y: posY, z: 0 },
+        size: { x: width, y: LEDGE_HEIGHT, z: LEDGE_DEPTH },
+        color: PLATFORMER_COLORS[colorIdx],
+      });
+
+      lastTopY = topY;
+    }
   }
 
   return obstacles;

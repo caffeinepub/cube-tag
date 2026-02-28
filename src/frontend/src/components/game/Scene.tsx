@@ -37,6 +37,10 @@ const FLOOR_RING_DECALS: {
   { id: "ring-5", pos: [-10, 0.02, -3], radius: 1.2, color: "#4400ff" },
   { id: "ring-6", pos: [18, 0.02, -6], radius: 1.8, color: "#ffcc00" },
   { id: "ring-7", pos: [-5, 0.02, 18], radius: 2.0, color: "#aa00ff" },
+  { id: "ring-8", pos: [-22, 0.02, -18], radius: 2.3, color: "#00ffcc" },
+  { id: "ring-9", pos: [22, 0.02, 15], radius: 1.9, color: "#ff0088" },
+  { id: "ring-10", pos: [-5, 0.02, 25], radius: 2.1, color: "#ffcc00" },
+  { id: "ring-11", pos: [20, 0.02, -22], radius: 1.6, color: "#aa00ff" },
 ];
 
 // Static neon tube light positions
@@ -50,6 +54,10 @@ const NEON_TUBES: {
   { id: "tube-1", pos: [12, 4.5, 8], color: "#ff0088", rotY: -0.6 },
   { id: "tube-2", pos: [-6, 4.5, 14], color: "#8800ff", rotY: 1.1 },
   { id: "tube-3", pos: [8, 4.5, -16], color: "#00aaff", rotY: 0.2 },
+  { id: "tube-4", pos: [20, 4.5, -20], color: "#ffcc00", rotY: 0.7 },
+  { id: "tube-5", pos: [-20, 4.5, 20], color: "#ff4400", rotY: -0.3 },
+  { id: "tube-6", pos: [25, 4.5, 5], color: "#00ffcc", rotY: 1.5 },
+  { id: "tube-7", pos: [-25, 4.5, -5], color: "#aa00ff", rotY: -1.0 },
 ];
 
 // Static decorative crates
@@ -65,6 +73,10 @@ const DECO_CRATES: {
   { id: "crate-3", pos: [14, 0.5, 14], size: 0.8, rotY: 1.2 },
   { id: "crate-4", pos: [-17, 0.5, 10], size: 1.0, rotY: -0.2 },
   { id: "crate-5", pos: [3, 0.5, -18], size: 0.8, rotY: 0.6 },
+  { id: "crate-6", pos: [-25, 0.5, -5], size: 1.1, rotY: 0.9 },
+  { id: "crate-7", pos: [24, 0.5, -18], size: 0.9, rotY: -0.4 },
+  { id: "crate-8", pos: [-8, 0.5, 25], size: 1.0, rotY: 1.3 },
+  { id: "crate-9", pos: [18, 0.5, 22], size: 0.8, rotY: -0.7 },
 ];
 
 // Wanted poster positions in 3D arena
@@ -110,6 +122,18 @@ const POSTER_POSITIONS_3D: {
     rotY: -Math.PI / 3,
     photoIdx: 2,
   },
+  {
+    id: "wp-6",
+    pos: [-28, 1.8, -12] as [number, number, number],
+    rotY: Math.PI / 2,
+    photoIdx: 1,
+  },
+  {
+    id: "wp-7",
+    pos: [28, 1.8, 18] as [number, number, number],
+    rotY: -Math.PI / 2,
+    photoIdx: 3,
+  },
 ];
 
 // Wanted poster positions in 2D platformer (background layer)
@@ -121,21 +145,27 @@ const POSTER_POSITIONS_2D: {
 }[] = [
   {
     id: "wp2d-0",
-    pos: [-10, 4, -3] as [number, number, number],
+    pos: [-18, 4, -3] as [number, number, number],
     rotY: 0,
     photoIdx: 1,
   },
   {
     id: "wp2d-1",
-    pos: [5, 6, -3] as [number, number, number],
+    pos: [8, 6, -3] as [number, number, number],
     rotY: 0,
     photoIdx: 3,
   },
   {
     id: "wp2d-2",
-    pos: [-2, 2, -3] as [number, number, number],
+    pos: [-5, 2, -3] as [number, number, number],
     rotY: 0,
     photoIdx: 0,
+  },
+  {
+    id: "wp2d-3",
+    pos: [15, 10, -3] as [number, number, number],
+    rotY: 0,
+    photoIdx: 2,
   },
 ];
 
@@ -162,14 +192,14 @@ const ARENA_LIGHTS: {
   color: string;
   intensity: number;
 }[] = [
-  { id: "alight-nw", pos: [-15, 3, -15], color: "#2244ff", intensity: 8 },
-  { id: "alight-ne", pos: [15, 3, -15], color: "#8800ff", intensity: 8 },
-  { id: "alight-sw", pos: [-15, 3, 15], color: "#00ccff", intensity: 8 },
-  { id: "alight-se", pos: [15, 3, 15], color: "#ff0088", intensity: 6 },
-  { id: "alight-n", pos: [0, 4, -18], color: "#4400ff", intensity: 5 },
-  { id: "alight-s", pos: [0, 4, 18], color: "#00ffcc", intensity: 5 },
-  { id: "alight-w", pos: [-18, 4, 0], color: "#ff4400", intensity: 5 },
-  { id: "alight-e", pos: [18, 4, 0], color: "#aa00ff", intensity: 5 },
+  { id: "alight-nw", pos: [-25, 3, -25], color: "#2244ff", intensity: 10 },
+  { id: "alight-ne", pos: [25, 3, -25], color: "#8800ff", intensity: 10 },
+  { id: "alight-sw", pos: [-25, 3, 25], color: "#00ccff", intensity: 10 },
+  { id: "alight-se", pos: [25, 3, 25], color: "#ff0088", intensity: 8 },
+  { id: "alight-n", pos: [0, 4, -28], color: "#4400ff", intensity: 6 },
+  { id: "alight-s", pos: [0, 4, 28], color: "#00ffcc", intensity: 6 },
+  { id: "alight-w", pos: [-28, 4, 0], color: "#ff4400", intensity: 6 },
+  { id: "alight-e", pos: [28, 4, 0], color: "#aa00ff", intensity: 6 },
 ];
 
 // Simple error boundary for Three.js components
@@ -464,12 +494,13 @@ interface SceneProps {
   cameraRef?: React.MutableRefObject<{ rotation: { y: number } } | null>;
   onPointerLockChange?: (locked: boolean) => void;
   controlMode?: "pc" | "mobile";
+  sensitivity?: number;
 }
 
 // Static 2D stars
-const STAR_POSITIONS_2D = Array.from({ length: 30 }, (_, i) => ({
+const STAR_POSITIONS_2D = Array.from({ length: 60 }, (_, i) => ({
   id: `star-${i * 7919 + 1}`,
-  pos: [((i * 137.5) % 40) - 20, (i * 73) % 14, -5 - (i % 5) * 3] as [
+  pos: [((i * 137.5) % 50) - 25, (i * 73) % 16, -5 - (i % 5) * 3] as [
     number,
     number,
     number,
@@ -488,6 +519,7 @@ export function Scene({
   cameraRef,
   onPointerLockChange,
   controlMode = "pc",
+  sensitivity = 1,
 }: SceneProps) {
   const { camera } = useThree();
   const is2D = mapType === "2d-platformer";
@@ -538,6 +570,32 @@ export function Scene({
     };
   }, [onPointerLockChange, controlMode]);
 
+  // PC mouse sensitivity: apply extra delta when sensitivity differs from 1.0
+  useEffect(() => {
+    if (controlMode === "mobile") return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isLockedRef.current) return;
+      // PointerLockControls already applies 1x sensitivity (0.002 per pixel)
+      // Apply the extra multiplier on top of that
+      const extraScale = sensitivity - 1;
+      if (Math.abs(extraScale) < 0.001) return;
+
+      const dx = e.movementX * 0.002 * extraScale;
+      const dy = e.movementY * 0.002 * extraScale;
+
+      camera.rotation.order = "YXZ";
+      camera.rotation.y -= dx;
+      camera.rotation.x = Math.max(
+        -Math.PI / 2,
+        Math.min(Math.PI / 2, camera.rotation.x - dy),
+      );
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    return () => document.removeEventListener("mousemove", handleMouseMove);
+  }, [controlMode, sensitivity, camera]);
+
   // Mobile touch-drag camera look
   const mobileLookRef = useRef<{ id: number; x: number; y: number } | null>(
     null,
@@ -548,7 +606,7 @@ export function Scene({
   useEffect(() => {
     if (controlMode !== "mobile") return;
 
-    const SENSITIVITY = 0.004;
+    const SENSITIVITY = 0.004 * sensitivity;
 
     const onTouchStart = (e: TouchEvent) => {
       const touch = Array.from(e.changedTouches).find(
@@ -610,7 +668,7 @@ export function Scene({
       canvas.removeEventListener("touchend", onTouchEnd);
       canvas.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [controlMode, camera]);
+  }, [controlMode, camera, sensitivity]);
 
   useFrame((_, delta) => {
     onFrame(delta, onPlayersUpdate);
@@ -740,7 +798,7 @@ export function Scene({
   return (
     <>
       {/* Fog — dense and moody */}
-      <fog attach="fog" args={["#06040f", 15, 45]} />
+      <fog attach="fog" args={["#06040f", 18, 65]} />
 
       {/* Dark void background */}
       <color attach="background" args={["#06040f"]} />
@@ -783,7 +841,7 @@ export function Scene({
 
       {/* Ground — dark glossy with grid */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[50, 50]} />
+        <planeGeometry args={[70, 70]} />
         <meshStandardMaterial
           color="#080614"
           roughness={0.1}
@@ -795,14 +853,14 @@ export function Scene({
       {/* Grid lines */}
       <Grid
         position={[0, 0.01, 0]}
-        args={[50, 50]}
+        args={[70, 70]}
         cellSize={2}
         cellThickness={0.3}
         cellColor="#1a0a3a"
         sectionSize={10}
         sectionThickness={0.6}
         sectionColor="#3a0a6a"
-        fadeDistance={40}
+        fadeDistance={55}
         fadeStrength={1.5}
         infiniteGrid={false}
       />

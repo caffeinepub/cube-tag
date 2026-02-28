@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import type { ObstacleBox, PlayerState, Vec3 } from "../../types/game";
 import { checkObstacleCollision } from "../../utils/mapGen";
 
-const MAP_BOUND = 21;
+const MAP_BOUND = 31;
 const TAG_DISTANCE = 1.8;
 const PLAYER_SPEED = 6;
 const BOT_NORMAL_SPEED = 6;

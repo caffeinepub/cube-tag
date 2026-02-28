@@ -74,6 +74,7 @@ export default function App() {
   >("random");
   const [controlMode, setControlMode] = useState<"pc" | "mobile">("pc");
   const [gameDuration, setGameDuration] = useState(100);
+  const [sensitivity, setSensitivity] = useState(1.0);
 
   // Lock scrolling during gameplay, allow it on menus
   useEffect(() => {
@@ -188,6 +189,8 @@ export default function App() {
         <HomeScreen
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          sensitivity={sensitivity}
+          onSensitivityChange={setSensitivity}
         />
       )}
       {screen === "lobby" && (
@@ -216,6 +219,7 @@ export default function App() {
           mapType={mapType}
           controlMode={controlMode}
           gameDuration={gameDuration}
+          sensitivity={sensitivity}
         />
       )}
       {screen === "end" && (

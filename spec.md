@@ -1,39 +1,33 @@
 # Cube Tag
 
 ## Current State
-- 3D first-person tag game with random arena maps and 2D platformer mode
-- Maps have corridor walls, pillars, L-shapes, wonky blocks, boundary walls
-- Bots use photo-in-a-box billboard style with 4 uploaded face photos
-- Scene.tsx renders the 3D/2D environments
-- ObstacleCubes.tsx renders obstacle geometry
-- mapGen.ts generates obstacle layouts
+Full-stack first-person cube tag game with 3D and 2D platformer modes. The HomeScreen has name input + room create/join flow + a control picker (PC/Mobile). The 3D arena uses MAP_SIZE=22 with corridors, pillars, L-walls, and wonky blocks. The 2D platformer generates a ground floor + 10-16 random floating ledges placed with `posX` from -14 to 14 and `posY` from 1.5 to 10. The scene is rendered via React Three Fiber. Sensitivity is hardcoded at 0.004 for mobile touch-look and is not user-configurable.
 
 ## Requested Changes (Diff)
 
 ### Add
-- "DEAD OR ALIVE" wanted poster props scattered throughout both 3D and 2D maps
-  - Each poster features one of the 4 uploaded photos: IMG_0963-1-1.jpeg, IMG_0964-1-2.jpeg, IMG_0929-3.png, IMG_0471-4.png
-  - Poster style: old western sepia/parchment-style billboard plane with "DEAD OR ALIVE" text above the photo and a reward amount below
-  - Posters appear on walls and as standalone standing boards
-  - 4-8 posters per map, each using a different photo cycling through all 4
-- Decorative map detail: floor decals (glowing circles/symbols), ceiling/overhead light rigs, scattered crates/barrels, broken pillars, dust/fog particles near the ground
-- 2D platformer: wanted posters hanging in the background layer, plus decorative background buildings/structures
+- Sensitivity slider in the main menu (HomeScreen) — a single labeled slider (range 0.5x to 3x, default 1x) stored in state and passed to GameScreen → Scene so both PC mouse look (PointerLockControls mouse movement multiplier) and mobile touch-drag use it
+- Broader 2D platformer map: wider x-range (-22 to 22), taller height range (1.5 to 14), better ledge spacing using a staggered column-based algorithm so ledges don't pile on top of each other, minimum horizontal gap between adjacent ledges, distinct ledge widths per height tier (wide near ground, narrow high up)
 
 ### Modify
-- mapGen.ts: add a `generateWantedPosters()` helper that returns poster position data (billboard planes with "DEAD OR ALIVE" text, not ObstacleBox)
-- Scene.tsx: render WantedPoster components using Billboard or flat mesh planes at specific positions, using the 4 new uploaded photo paths
-- ObstacleCubes.tsx: add variation — some obstacles get a graffiti/worn texture look via emissive color patterns, floor obstacles get a different roughness
+- `generatePlatformerMap` in mapGen.ts: replace the fully random placement with a structured layout — divide the map into columns (x zones), place 1-2 ledges per column at staggered heights, ensure no two ledges in the same column are within 2 units vertically, expand x range to -22/+22 and y range to 1.5-14
+- `generateMap` (3D arena): expand MAP_SIZE from 22 to 32, increase boundary walls accordingly, add more obstacles (raise corridorCount max to 16, pillarGroupCount max to 8, lWallCount max to 10, wonkyCount max to 14), spread ARENA_LIGHTS and NEON_TUBES to cover the larger area, widen fog far plane from 45 to 65
+- `Scene.tsx`: accept a `sensitivity` prop and apply it as a multiplier to the mobile touch sensitivity constant; for PC, sensitivity is handled via PointerLockControls which uses the browser mouse sensitivity natively — expose a `mouseSensitivity` prop that Scene stores in a ref and uses in a `mousemove` override if needed (or simply pass it through to the PointerLockControls)
+- `HomeScreen.tsx`: add a Settings section on the main screen with a horizontal sensitivity slider (label "Look Sensitivity", values 0.5–3.0, step 0.1, default 1.0), display current value next to label; pass sensitivity up via callback or store in App state
+- `App.tsx`: add `sensitivity` state (default 1.0), pass to HomeScreen (callback), and pass down to GameScreen
+- `GameScreen.tsx`: accept and forward `sensitivity` prop to Scene
+- STAR_POSITIONS_2D: expand to 60 stars to fill the larger map
+- POSTER_POSITIONS_2D: spread posters across new wider range
 
 ### Remove
 - Nothing removed
 
 ## Implementation Plan
-1. Add WantedPoster component in Scene.tsx using Billboard + Text + useLoader for the photo texture
-   - Poster layout: dark parchment background plane, photo in center, "DEAD OR ALIVE" text above, "REWARD" text below
-   - Use the new uploaded photo paths: /assets/uploads/IMG_0963-1-1.jpeg, /assets/uploads/IMG_0964-1-2.jpeg, /assets/uploads/IMG_0929-3.png, /assets/uploads/IMG_0471-4.png
-2. Update bot face texture references in Scene.tsx from old paths to new uploaded paths (current code still references old paths that don't exist)
-3. Add poster placement data to mapGen.ts — export `generatePosterPositions(seed)` returning array of {id, position, photoIndex, rotation}
-4. In Scene.tsx 3D mode: render 4-8 WantedPoster components at generated positions (mounted on walls or as standing boards)
-5. In Scene.tsx 2D mode: render 2-4 WantedPoster components in background layer (z slightly behind platforms)
-6. Enhance map visuals: add decorative floor ring decals, overhead neon tube lights between walls, scattered small crate boxes
-7. Update GameScreen.tsx BOT_PHOTO_MAP to use new uploaded photo paths
+1. Update `mapGen.ts` — `generatePlatformerMap`: structured column-based layout with wider x/y range
+2. Update `mapGen.ts` — `generateMap` (3D): expand MAP_SIZE to 32, raise obstacle counts
+3. Update `Scene.tsx`: accept `sensitivity` prop, apply to mobile touch look, spread lights/tubes/stars for larger 3D map, expand 2D stars and poster positions
+4. Update `HomeScreen.tsx`: add sensitivity slider, emit value via `onSensitivityChange` callback prop
+5. Update `App.tsx`: add `sensitivity` state, wire HomeScreen callback and pass to GameScreen
+6. Update `GameScreen.tsx`: accept and forward `sensitivity` prop to Scene
+7. Update `useGameLoop.ts` (if needed): no changes needed — sensitivity is a rendering/camera concern only
+8. Update fog in `Scene.tsx` 3D mode to match expanded map

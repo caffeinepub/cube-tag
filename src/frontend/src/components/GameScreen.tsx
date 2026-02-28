@@ -165,6 +165,7 @@ interface GameScreenProps {
   mapType?: "3d" | "2d-platformer";
   controlMode?: "pc" | "mobile";
   gameDuration?: number;
+  sensitivity?: number;
 }
 
 export function GameScreen({
@@ -176,6 +177,7 @@ export function GameScreen({
   mapType = "3d",
   controlMode = "pc",
   gameDuration = 100,
+  sensitivity = 1,
 }: GameScreenProps) {
   const [players, setPlayers] = useState<PlayerState[]>(initialPlayers);
   const [timeRemaining, setTimeRemaining] = useState(gameDuration);
@@ -307,6 +309,7 @@ export function GameScreen({
           cameraRef={cameraRef}
           onPointerLockChange={setIsPointerLocked}
           controlMode={controlMode}
+          sensitivity={sensitivity}
         />
       </Canvas>
 

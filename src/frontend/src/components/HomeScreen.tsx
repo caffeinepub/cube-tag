@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 
@@ -78,9 +79,16 @@ interface HomeScreenProps {
     roomCode: string,
     controlMode: "pc" | "mobile",
   ) => void;
+  sensitivity?: number;
+  onSensitivityChange?: (val: number) => void;
 }
 
-export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
+export function HomeScreen({
+  onCreateRoom,
+  onJoinRoom,
+  sensitivity,
+  onSensitivityChange,
+}: HomeScreenProps) {
   const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [mode, setMode] = useState<"main" | "join" | "controls">("main");
@@ -224,6 +232,29 @@ export function HomeScreen({ onCreateRoom, onJoinRoom }: HomeScreenProps) {
 
           {mode === "main" && (
             <div className="space-y-3">
+              {/* Look Sensitivity slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs tracking-widest uppercase text-muted-foreground">
+                    Look Sensitivity
+                  </Label>
+                  <span
+                    style={{ color: "oklch(0.82 0.18 195)" }}
+                    className="text-sm font-bold"
+                  >
+                    {sensitivity?.toFixed(1) ?? "1.0"}x
+                  </span>
+                </div>
+                <Slider
+                  min={0.5}
+                  max={3.0}
+                  step={0.1}
+                  value={[sensitivity ?? 1.0]}
+                  onValueChange={(v) => onSensitivityChange?.(v[0])}
+                  className="w-full"
+                />
+              </div>
+
               <Button
                 className="w-full h-12 text-base font-bold tracking-wide neon-border-cyan"
                 style={{
