@@ -1,5 +1,7 @@
 export type GameScreen = "home" | "lobby" | "game" | "end";
 
+export type GraphicsQuality = "fast" | "medium" | "high";
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -26,6 +28,13 @@ export interface ObstacleBox {
   size: Vec3;
   color: string;
   rotation?: Vec3; // optional Euler rotation
+}
+
+/** Anchor point for a wanted poster attached to a wall */
+export interface PosterAnchor {
+  pos: [number, number, number];
+  rotY: number;
+  photoIdx: number;
 }
 
 export interface GameState {

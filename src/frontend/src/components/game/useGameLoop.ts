@@ -123,7 +123,8 @@ function pickRandomTarget(
 
 /**
  * Improved bot navigation with predictive lead.
- * Tries 16 directions and picks the best navigable one.
+ * Tries 32 directions and picks the best navigable one.
+ * Falls back to cardinal directions if all are blocked.
  */
 function findBestBotDirection(
   botPos: Vec3,
@@ -133,12 +134,12 @@ function findBestBotDirection(
   obstacles: ObstacleBox[],
   isChasing: boolean,
 ): { dx: number; dz: number } {
-  let desiredX = isChasing ? targetPos.x - botPos.x : botPos.x - targetPos.x;
-  let desiredZ = isChasing ? targetPos.z - botPos.z : botPos.z - targetPos.z;
+  const desiredX = isChasing ? targetPos.x - botPos.x : botPos.x - targetPos.x;
+  const desiredZ = isChasing ? targetPos.z - botPos.z : botPos.z - targetPos.z;
 
   const { dx: baseDx, dz: baseDz } = normalize(desiredX, desiredZ);
 
-  const NUM_DIRS = 16;
+  const NUM_DIRS = 32;
   const candidates: { dx: number; dz: number; score: number }[] = [];
 
   for (let i = 0; i < NUM_DIRS; i++) {
@@ -162,6 +163,31 @@ function findBestBotDirection(
   }
 
   if (candidates.length === 0) {
+    // Cardinal fallback: try all 4 cardinal directions and pick the first unblocked one
+    const CARDINALS = [
+      { dx: 1, dz: 0 },
+      { dx: -1, dz: 0 },
+      { dx: 0, dz: 1 },
+      { dx: 0, dz: -1 },
+    ];
+    for (const card of CARDINALS) {
+      const nx = clamp(
+        botPos.x + card.dx * speed * delta,
+        -MAP_BOUND,
+        MAP_BOUND,
+      );
+      const nz = clamp(
+        botPos.z + card.dz * speed * delta,
+        -MAP_BOUND,
+        MAP_BOUND,
+      );
+      const { blocked } = checkObstacleCollision(
+        { x: nx, y: botPos.y, z: nz },
+        obstacles,
+      );
+      if (!blocked) return card;
+    }
+    // Truly stuck — pick random direction
     const angle = Math.random() * Math.PI * 2;
     return { dx: Math.cos(angle), dz: Math.sin(angle) };
   }
@@ -611,9 +637,9 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         }
 
-        if ((botStuckTimers[player.id] ?? 0) > 0.6) {
+        if ((botStuckTimers[player.id] ?? 0) > 0.25) {
           botStuckTimers[player.id] = 0;
-          botRandomDirTimers[player.id] = 0.6;
+          botRandomDirTimers[player.id] = 1.2;
           // Force a new target pick next time
           botTargetTimer[player.id] = 0;
           const angle = Math.random() * Math.PI * 2;

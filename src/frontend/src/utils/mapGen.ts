@@ -1,4 +1,4 @@
-import type { ObstacleBox, Vec3 } from "../types/game";
+import type { ObstacleBox, PosterAnchor, Vec3 } from "../types/game";
 import {
   createSeededRandom,
   randomInRange,
@@ -35,7 +35,10 @@ function boxesOverlap(
   );
 }
 
-export function generateMap(seed: number): ObstacleBox[] {
+export function generateMap(seed: number): {
+  obstacles: ObstacleBox[];
+  posterAnchors: PosterAnchor[];
+} {
   const rng = createSeededRandom(seed);
   const obstacles: ObstacleBox[] = [];
 
@@ -240,7 +243,95 @@ export function generateMap(seed: number): ObstacleBox[] {
     obstacles.push({ id, position: pos, size, color: col });
   });
 
-  return obstacles;
+  // ─── Poster anchors from boundary walls ──────────────────────────────────
+  const posterAnchors: PosterAnchor[] = [];
+  const POSTER_INSET = 0.8; // how far inward from wall center
+
+  // Boundary wall poster positions — one spread position per wall
+  const boundaryPosters: PosterAnchor[] = [
+    // bound-n: z = -MAP_SIZE, faces south (+z direction), rotY = 0
+    {
+      pos: [
+        randomInRange(rng, -MAP_SIZE * 0.6, MAP_SIZE * 0.6),
+        1.8,
+        -MAP_SIZE + POSTER_INSET,
+      ],
+      rotY: 0,
+      photoIdx: 0,
+    },
+    // bound-s: z = +MAP_SIZE, faces north (-z direction), rotY = Math.PI
+    {
+      pos: [
+        randomInRange(rng, -MAP_SIZE * 0.6, MAP_SIZE * 0.6),
+        1.8,
+        MAP_SIZE - POSTER_INSET,
+      ],
+      rotY: Math.PI,
+      photoIdx: 1,
+    },
+    // bound-w: x = -MAP_SIZE, faces east (+x direction), rotY = Math.PI / 2
+    {
+      pos: [
+        -MAP_SIZE + POSTER_INSET,
+        1.8,
+        randomInRange(rng, -MAP_SIZE * 0.6, MAP_SIZE * 0.6),
+      ],
+      rotY: Math.PI / 2,
+      photoIdx: 2,
+    },
+    // bound-e: x = +MAP_SIZE, faces west (-x direction), rotY = -Math.PI / 2
+    {
+      pos: [
+        MAP_SIZE - POSTER_INSET,
+        1.8,
+        randomInRange(rng, -MAP_SIZE * 0.6, MAP_SIZE * 0.6),
+      ],
+      rotY: -Math.PI / 2,
+      photoIdx: 3,
+    },
+  ];
+  posterAnchors.push(...boundaryPosters);
+
+  // ─── Corridor wall posters (up to 4 more) ────────────────────────────────
+  const longWalls = obstacles.filter(
+    (o) => o.id.startsWith("corridor") && (o.size.x > 6 || o.size.z > 6),
+  );
+
+  let corridorPosterCount = 0;
+  for (const wall of longWalls) {
+    if (corridorPosterCount >= 4) break;
+    // Place poster on the longer face, midpoint, facing inward
+    const isLongX = wall.size.x >= wall.size.z;
+    let rotY: number;
+    let pos: [number, number, number];
+    if (isLongX) {
+      // Wall extends in X — poster on one of the Z faces
+      const faceZ =
+        rng() > 0.5
+          ? wall.position.z + wall.size.z / 2
+          : wall.position.z - wall.size.z / 2;
+      const facingIn = faceZ > wall.position.z ? Math.PI : 0;
+      pos = [wall.position.x, 1.8, faceZ];
+      rotY = facingIn;
+    } else {
+      // Wall extends in Z — poster on one of the X faces
+      const faceX =
+        rng() > 0.5
+          ? wall.position.x + wall.size.x / 2
+          : wall.position.x - wall.size.x / 2;
+      const facingIn = faceX > wall.position.x ? -Math.PI / 2 : Math.PI / 2;
+      pos = [faceX, 1.8, wall.position.z];
+      rotY = facingIn;
+    }
+    posterAnchors.push({
+      pos,
+      rotY,
+      photoIdx: corridorPosterCount % 4,
+    });
+    corridorPosterCount++;
+  }
+
+  return { obstacles, posterAnchors };
 }
 
 const PLATFORMER_COLORS = [
@@ -273,47 +364,42 @@ export function generatePlatformerMap(seed: number): ObstacleBox[] {
   const COL_WIDTH = (X_MAX - X_MIN) / COLUMNS; // ~4.89 units wide
   const LEDGE_HEIGHT = 0.4;
   const LEDGE_DEPTH = 2;
-  const MIN_VERTICAL_GAP = 2.5;
   const HEIGHT_MIN = 1.5;
-  const HEIGHT_MAX = 14;
+  // Max safe vertical gap: BOT_JUMP_VELOCITY^2 / (2*GRAVITY) ≈ 5.6, use 4.5 for safety
+  const MAX_VERTICAL_GAP = 4.5;
+  const HEIGHT_MAX = 10; // Reduced from 14 for reachability
 
   let platformIdx = 0;
 
   for (let col = 0; col < COLUMNS; col++) {
     const centerX = X_MIN + col * COL_WIDTH + COL_WIDTH / 2;
 
-    // Place 2 ledges per column at staggered heights
-    let lastTopY: number | null = null;
+    // Place 3 ledges per column with controlled stairstepping heights
+    // First ledge: 1.5–3.0
+    // Second ledge: first + 2.5–4.5
+    // Third ledge: second + 2.5–4.5
+    const firstTopY = randomInRange(rng, HEIGHT_MIN, 3.0);
+    const secondTopY = Math.min(
+      firstTopY + randomInRange(rng, 2.5, MAX_VERTICAL_GAP),
+      HEIGHT_MAX,
+    );
+    const thirdTopY = Math.min(
+      secondTopY + randomInRange(rng, 2.5, MAX_VERTICAL_GAP),
+      HEIGHT_MAX,
+    );
 
-    for (let ledge = 0; ledge < 2; ledge++) {
-      // Determine height tier for this ledge (stagger: first ledge lower, second higher)
-      const tierMin =
-        ledge === 0
-          ? HEIGHT_MIN
-          : Math.min(HEIGHT_MIN + MIN_VERTICAL_GAP * 2, HEIGHT_MAX - 3);
-      const tierMax = ledge === 0 ? HEIGHT_MAX * 0.55 : HEIGHT_MAX;
+    const ledgeTops = [firstTopY, secondTopY, thirdTopY];
 
-      let topY = randomInRange(rng, tierMin, tierMax);
-
-      // Ensure minimum vertical gap from the previous ledge in this column
-      if (lastTopY !== null) {
-        const gap = Math.abs(topY - lastTopY);
-        if (gap < MIN_VERTICAL_GAP) {
-          topY = lastTopY + MIN_VERTICAL_GAP + randomInRange(rng, 0, 1.5);
-        }
-      }
-      topY = Math.min(topY, HEIGHT_MAX);
+    for (let ledge = 0; ledge < 3; ledge++) {
+      const topY = ledgeTops[ledge];
 
       // Width based on height tier: lower = wider, higher = narrower
       let width: number;
-      if (topY < 5) {
-        // Lower ledges: wide (4–8 units)
+      if (topY < 4) {
         width = randomInRange(rng, 4, 8);
-      } else if (topY > 8) {
-        // Higher ledges: narrow (2–4.5 units)
+      } else if (topY > 7) {
         width = randomInRange(rng, 2, 4.5);
       } else {
-        // Mid-range: medium (3–6 units)
         width = randomInRange(rng, 3, 6);
       }
 
@@ -332,8 +418,6 @@ export function generatePlatformerMap(seed: number): ObstacleBox[] {
         size: { x: width, y: LEDGE_HEIGHT, z: LEDGE_DEPTH },
         color: PLATFORMER_COLORS[colorIdx],
       });
-
-      lastTopY = topY;
     }
   }
 

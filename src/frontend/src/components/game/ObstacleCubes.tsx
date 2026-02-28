@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import type { ObstacleBox } from "../../types/game";
+import type { GraphicsQuality, ObstacleBox } from "../../types/game";
 
 interface ObstacleCubesProps {
   obstacles: ObstacleBox[];
+  graphicsQuality?: GraphicsQuality;
 }
 
 /**
@@ -21,12 +22,32 @@ function hexToEmissive(hex: string): string {
   }
 }
 
-export function ObstacleCubes({ obstacles }: ObstacleCubesProps) {
+export function ObstacleCubes({
+  obstacles,
+  graphicsQuality = "medium",
+}: ObstacleCubesProps) {
   return (
     <>
       {obstacles.map((obs) => {
-        const emissiveColor = hexToEmissive(obs.color);
+        if (graphicsQuality === "fast") {
+          // Fast mode: meshBasicMaterial — no lighting calculation
+          return (
+            <mesh
+              key={obs.id}
+              position={[obs.position.x, obs.position.y, obs.position.z]}
+              rotation={
+                obs.rotation
+                  ? [obs.rotation.x, obs.rotation.y, obs.rotation.z]
+                  : [0, 0, 0]
+              }
+            >
+              <boxGeometry args={[obs.size.x, obs.size.y, obs.size.z]} />
+              <meshBasicMaterial color={obs.color} />
+            </mesh>
+          );
+        }
 
+        const emissiveColor = hexToEmissive(obs.color);
         return (
           <mesh
             key={obs.id}
@@ -36,8 +57,8 @@ export function ObstacleCubes({ obstacles }: ObstacleCubesProps) {
                 ? [obs.rotation.x, obs.rotation.y, obs.rotation.z]
                 : [0, 0, 0]
             }
-            castShadow
-            receiveShadow
+            castShadow={graphicsQuality === "high"}
+            receiveShadow={graphicsQuality === "high"}
           >
             <boxGeometry args={[obs.size.x, obs.size.y, obs.size.z]} />
             <meshStandardMaterial

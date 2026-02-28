@@ -3,7 +3,12 @@ import { useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Component, type ReactNode, Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { TextureLoader } from "three";
-import type { ObstacleBox, PlayerState } from "../../types/game";
+import type {
+  GraphicsQuality,
+  ObstacleBox,
+  PlayerState,
+  PosterAnchor,
+} from "../../types/game";
 import { ObstacleCubes } from "./ObstacleCubes";
 
 // Bot face image paths — matches the uploaded photos
@@ -79,62 +84,7 @@ const DECO_CRATES: {
   { id: "crate-9", pos: [18, 0.5, 22], size: 0.8, rotY: -0.7 },
 ];
 
-// Wanted poster positions in 3D arena
-const POSTER_POSITIONS_3D: {
-  id: string;
-  pos: [number, number, number];
-  rotY: number;
-  photoIdx: number;
-}[] = [
-  {
-    id: "wp-0",
-    pos: [-20, 1.8, -8] as [number, number, number],
-    rotY: Math.PI / 2,
-    photoIdx: 0,
-  },
-  {
-    id: "wp-1",
-    pos: [20, 1.8, 5] as [number, number, number],
-    rotY: -Math.PI / 2,
-    photoIdx: 1,
-  },
-  {
-    id: "wp-2",
-    pos: [8, 1.8, -20] as [number, number, number],
-    rotY: 0,
-    photoIdx: 2,
-  },
-  {
-    id: "wp-3",
-    pos: [-5, 1.8, 20] as [number, number, number],
-    rotY: Math.PI,
-    photoIdx: 3,
-  },
-  {
-    id: "wp-4",
-    pos: [-12, 1.8, 3] as [number, number, number],
-    rotY: Math.PI / 4,
-    photoIdx: 0,
-  },
-  {
-    id: "wp-5",
-    pos: [10, 1.8, -10] as [number, number, number],
-    rotY: -Math.PI / 3,
-    photoIdx: 2,
-  },
-  {
-    id: "wp-6",
-    pos: [-28, 1.8, -12] as [number, number, number],
-    rotY: Math.PI / 2,
-    photoIdx: 1,
-  },
-  {
-    id: "wp-7",
-    pos: [28, 1.8, 18] as [number, number, number],
-    rotY: -Math.PI / 2,
-    photoIdx: 3,
-  },
-];
+// POSTER_POSITIONS_3D removed — posters are now generated per-map via posterAnchors prop
 
 // Wanted poster positions in 2D platformer (background layer)
 const POSTER_POSITIONS_2D: {
@@ -487,6 +437,7 @@ function BotCharacter({ player, botIndex }: BotCharacterProps) {
 interface SceneProps {
   players: PlayerState[];
   obstacles: ObstacleBox[];
+  posterAnchors?: PosterAnchor[];
   keysRef: React.MutableRefObject<Set<string>>;
   onFrame: (delta: number, onUpdate: (players: PlayerState[]) => void) => void;
   onPlayersUpdate: (players: PlayerState[]) => void;
@@ -495,6 +446,7 @@ interface SceneProps {
   onPointerLockChange?: (locked: boolean) => void;
   controlMode?: "pc" | "mobile";
   sensitivity?: number;
+  graphicsQuality?: GraphicsQuality;
 }
 
 // Static 2D stars
@@ -513,6 +465,7 @@ const botIndexMap: Record<string, number> = {};
 export function Scene({
   players,
   obstacles,
+  posterAnchors,
   onFrame,
   onPlayersUpdate,
   mapType = "3d",
@@ -520,6 +473,7 @@ export function Scene({
   onPointerLockChange,
   controlMode = "pc",
   sensitivity = 1,
+  graphicsQuality = "medium",
 }: SceneProps) {
   const { camera } = useThree();
   const is2D = mapType === "2d-platformer";
@@ -686,14 +640,22 @@ export function Scene({
       <>
         <color attach="background" args={["#0a0020"]} />
         <ambientLight intensity={0.7} color="#ccaaff" />
-        <directionalLight
-          position={[0, 10, 10]}
-          intensity={1.4}
-          color="#ffffff"
-          castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
-        />
+        {graphicsQuality === "high" ? (
+          <directionalLight
+            position={[0, 10, 10]}
+            intensity={1.4}
+            color="#ffffff"
+            castShadow
+            shadow-mapSize-width={1024}
+            shadow-mapSize-height={1024}
+          />
+        ) : (
+          <directionalLight
+            position={[0, 10, 10]}
+            intensity={1.4}
+            color="#ffffff"
+          />
+        )}
         <pointLight position={[0, 8, 5]} intensity={0.5} color="#ff44cc" />
 
         {/* PointerLockControls for first-person mouse look in 2D mode (PC only) */}
@@ -718,7 +680,10 @@ export function Scene({
           </mesh>
         ))}
 
-        <ObstacleCubes obstacles={obstacles} />
+        <ObstacleCubes
+          obstacles={obstacles}
+          graphicsQuality={graphicsQuality}
+        />
 
         {/* Wanted Posters in background */}
         {POSTER_POSITIONS_2D.map((p) => (
@@ -803,41 +768,61 @@ export function Scene({
       {/* Dark void background */}
       <color attach="background" args={["#06040f"]} />
 
-      {/* Lighting */}
-      <ambientLight intensity={0.15} color="#1a0a3a" />
-      <directionalLight
-        position={[10, 20, 10]}
-        intensity={1.5}
-        color="#aaaaff"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-far={80}
-        shadow-camera-left={-30}
-        shadow-camera-right={30}
-        shadow-camera-top={30}
-        shadow-camera-bottom={-30}
-      />
+      {/* Lighting — quality-tiered */}
+      {graphicsQuality === "fast" ? (
+        <>
+          <ambientLight intensity={0.6} color="#aaaacc" />
+        </>
+      ) : graphicsQuality === "medium" ? (
+        <>
+          <ambientLight intensity={0.15} color="#1a0a3a" />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={1.5}
+            color="#aaaaff"
+          />
+        </>
+      ) : (
+        /* high */
+        <>
+          <ambientLight intensity={0.15} color="#1a0a3a" />
+          <directionalLight
+            position={[10, 20, 10]}
+            intensity={1.5}
+            color="#aaaaff"
+            castShadow
+            shadow-mapSize-width={2048}
+            shadow-mapSize-height={2048}
+            shadow-camera-far={80}
+            shadow-camera-left={-30}
+            shadow-camera-right={30}
+            shadow-camera-top={30}
+            shadow-camera-bottom={-30}
+          />
+        </>
+      )}
 
-      {/* Colored arena accent lights */}
-      {ARENA_LIGHTS.map((light) => (
-        <pointLight
-          key={light.id}
-          position={light.pos}
-          color={light.color}
-          intensity={light.intensity}
-          distance={18}
-          decay={2}
-        />
-      ))}
+      {/* Colored arena accent lights — medium+ only */}
+      {graphicsQuality !== "fast" &&
+        ARENA_LIGHTS.map((light) => (
+          <pointLight
+            key={light.id}
+            position={light.pos}
+            color={light.color}
+            intensity={light.intensity}
+            distance={18}
+            decay={2}
+          />
+        ))}
 
-      {/* Starfield */}
-      {STAR_POSITIONS.map((star) => (
-        <mesh key={star.id} position={star.pos}>
-          <sphereGeometry args={[0.04, 4, 4]} />
-          <meshBasicMaterial color="#ffffff" />
-        </mesh>
-      ))}
+      {/* Starfield — high only */}
+      {graphicsQuality === "high" &&
+        STAR_POSITIONS.map((star) => (
+          <mesh key={star.id} position={star.pos}>
+            <sphereGeometry args={[0.04, 4, 4]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+        ))}
 
       {/* Ground — light gray */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -850,20 +835,22 @@ export function Scene({
         />
       </mesh>
 
-      {/* Grid lines */}
-      <Grid
-        position={[0, 0.01, 0]}
-        args={[70, 70]}
-        cellSize={2}
-        cellThickness={0.3}
-        cellColor="#b0b0b0"
-        sectionSize={10}
-        sectionThickness={0.6}
-        sectionColor="#909090"
-        fadeDistance={55}
-        fadeStrength={1.5}
-        infiniteGrid={false}
-      />
+      {/* Grid lines — medium+ only */}
+      {graphicsQuality !== "fast" && (
+        <Grid
+          position={[0, 0.01, 0]}
+          args={[70, 70]}
+          cellSize={2}
+          cellThickness={0.3}
+          cellColor="#b0b0b0"
+          sectionSize={10}
+          sectionThickness={0.6}
+          sectionColor="#909090"
+          fadeDistance={55}
+          fadeStrength={1.5}
+          infiniteGrid={false}
+        />
+      )}
 
       {/* PointerLockControls for first-person mouse look (PC only) */}
       {controlMode !== "mobile" && (
@@ -881,62 +868,73 @@ export function Scene({
       )}
 
       {/* Obstacles */}
-      <ObstacleCubes obstacles={obstacles} />
+      <ObstacleCubes obstacles={obstacles} graphicsQuality={graphicsQuality} />
 
-      {/* Wanted Posters */}
-      {POSTER_POSITIONS_3D.map((p) => (
+      {/* Wanted Posters — rendered from posterAnchors prop (randomly generated per map) */}
+      {posterAnchors?.map((p, idx) => (
         <WantedPoster
-          key={p.id}
+          // eslint-disable-next-line react/no-array-index-key -- poster anchors are stable positional data
+          key={`poster-anchor-${p.pos[0].toFixed(1)}-${p.pos[2].toFixed(1)}-${idx}`}
           position={p.pos}
           rotationY={p.rotY}
           photoIndex={p.photoIdx}
         />
       ))}
 
-      {/* Floor ring decals */}
-      {FLOOR_RING_DECALS.map((ring) => (
-        <mesh key={ring.id} position={ring.pos} rotation={[-Math.PI / 2, 0, 0]}>
-          <ringGeometry args={[ring.radius * 0.7, ring.radius, 48]} />
-          <meshBasicMaterial color={ring.color} transparent opacity={0.35} />
-        </mesh>
-      ))}
+      {/* Floor ring decals — medium+ only */}
+      {graphicsQuality !== "fast" &&
+        FLOOR_RING_DECALS.map((ring) => (
+          <mesh
+            key={ring.id}
+            position={ring.pos}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <ringGeometry args={[ring.radius * 0.7, ring.radius, 48]} />
+            <meshBasicMaterial color={ring.color} transparent opacity={0.35} />
+          </mesh>
+        ))}
 
-      {/* Neon tube lights */}
-      {NEON_TUBES.map((tube) => (
-        <group key={tube.id} position={tube.pos} rotation={[0, tube.rotY, 0]}>
-          <mesh>
-            <boxGeometry args={[0.1, 0.15, 6]} />
-            <meshStandardMaterial
+      {/* Neon tube lights — medium+ only */}
+      {graphicsQuality !== "fast" &&
+        NEON_TUBES.map((tube) => (
+          <group key={tube.id} position={tube.pos} rotation={[0, tube.rotY, 0]}>
+            <mesh>
+              <boxGeometry args={[0.1, 0.15, 6]} />
+              <meshStandardMaterial
+                color={tube.color}
+                emissive={tube.color}
+                emissiveIntensity={2.5}
+                roughness={0.2}
+                metalness={0.8}
+              />
+            </mesh>
+            <pointLight
               color={tube.color}
-              emissive={tube.color}
-              emissiveIntensity={2.5}
-              roughness={0.2}
-              metalness={0.8}
+              intensity={4}
+              distance={8}
+              decay={2}
+            />
+          </group>
+        ))}
+
+      {/* Decorative crates — medium+ only */}
+      {graphicsQuality !== "fast" &&
+        DECO_CRATES.map((crate) => (
+          <mesh
+            key={crate.id}
+            position={crate.pos}
+            rotation={[0, crate.rotY, 0]}
+          >
+            <boxGeometry args={[crate.size, crate.size, crate.size]} />
+            <meshStandardMaterial
+              color="#1a1010"
+              roughness={0.4}
+              metalness={0.75}
+              emissive="#220a00"
+              emissiveIntensity={0.2}
             />
           </mesh>
-          <pointLight color={tube.color} intensity={4} distance={8} decay={2} />
-        </group>
-      ))}
-
-      {/* Decorative crates */}
-      {DECO_CRATES.map((crate) => (
-        <mesh
-          key={crate.id}
-          position={crate.pos}
-          rotation={[0, crate.rotY, 0]}
-          castShadow
-          receiveShadow
-        >
-          <boxGeometry args={[crate.size, crate.size, crate.size]} />
-          <meshStandardMaterial
-            color="#1a1010"
-            roughness={0.4}
-            metalness={0.75}
-            emissive="#220a00"
-            emissiveIntensity={0.2}
-          />
-        </mesh>
-      ))}
+        ))}
 
       {/* Bot characters (NOT local player — first-person) */}
       {players

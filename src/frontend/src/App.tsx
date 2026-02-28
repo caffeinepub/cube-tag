@@ -3,10 +3,13 @@ import { EndScreen } from "./components/EndScreen";
 import { GameScreen } from "./components/GameScreen";
 import { HomeScreen } from "./components/HomeScreen";
 import { LobbyScreen } from "./components/LobbyScreen";
+import { useActor } from "./hooks/useActor";
 import type {
   GameScreen as GameScreenType,
+  GraphicsQuality,
   ObstacleBox,
   PlayerState,
+  PosterAnchor,
 } from "./types/game";
 import { generateMap, generatePlatformerMap } from "./utils/mapGen";
 
@@ -15,6 +18,18 @@ const BOT_NAMES = ["Bot Alpha", "Bot Beta", "Bot Gamma"];
 
 // Max 4 entities play at once; up to 10 humans can join
 const MAX_ENTITIES = 4;
+
+/** Poll for window.backendActor until it's available or timeout is reached */
+async function waitForActor(maxWaitMs = 8000): Promise<any | null> {
+  const interval = 300;
+  const maxAttempts = Math.ceil(maxWaitMs / interval);
+  for (let i = 0; i < maxAttempts; i++) {
+    const actor = (window as any).backendActor;
+    if (actor) return actor;
+    await new Promise((res) => setTimeout(res, interval));
+  }
+  return null;
+}
 
 function generateRoomCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -104,6 +119,15 @@ function buildLobbyPlayers(
 }
 
 export default function App() {
+  const { actor } = useActor();
+
+  // Sync actor to window.backendActor so the polling helper can find it
+  useEffect(() => {
+    if (actor) {
+      (window as any).backendActor = actor;
+    }
+  }, [actor]);
+
   const [screen, setScreen] = useState<GameScreenType>("home");
   const [roomCode, setRoomCode] = useState("");
   const [isHost, setIsHost] = useState(false);
@@ -113,6 +137,7 @@ export default function App() {
   const [humanPlayerCount, setHumanPlayerCount] = useState(1); // how many real humans in the room
   const [gamePlayers, setGamePlayers] = useState<PlayerState[]>([]);
   const [obstacles, setObstacles] = useState<ObstacleBox[]>([]);
+  const [posterAnchors, setPosterAnchors] = useState<PosterAnchor[]>([]);
   const [winners, setWinners] = useState<string[]>([]);
   const [finalPlayers, setFinalPlayers] = useState<PlayerState[]>([]);
   const [mapType, setMapType] = useState<"3d" | "2d-platformer">("3d");
@@ -122,6 +147,8 @@ export default function App() {
   const [controlMode, setControlMode] = useState<"pc" | "mobile">("pc");
   const [gameDuration, setGameDuration] = useState(100);
   const [sensitivity, setSensitivity] = useState(1.0);
+  const [graphicsQuality, setGraphicsQuality] =
+    useState<GraphicsQuality>("medium");
   const [joinError, setJoinError] = useState("");
   const [isJoining, setIsJoining] = useState(false);
 
@@ -219,11 +246,17 @@ export default function App() {
               type = smt;
             }
             setMapType(type);
-            const newObstacles =
-              type === "2d-platformer"
-                ? generatePlatformerMap(seed)
-                : generateMap(seed);
+            let newObstacles: ObstacleBox[];
+            let newPosterAnchors: PosterAnchor[] = [];
+            if (type === "2d-platformer") {
+              newObstacles = generatePlatformerMap(seed);
+            } else {
+              const mapResult = generateMap(seed);
+              newObstacles = mapResult.obstacles;
+              newPosterAnchors = mapResult.posterAnchors;
+            }
             setObstacles(newObstacles);
+            setPosterAnchors(newPosterAnchors);
 
             // Build game players from server + bots
             setLobbyPlayers((currentLobby) => {
@@ -270,9 +303,9 @@ export default function App() {
       setHumanPlayerCount(1);
       setScreen("lobby");
 
-      // Persist room to backend
+      // Persist room to backend (wait for actor to be ready)
       try {
-        const actor = (window as any).backendActor;
+        const actor = await waitForActor();
         if (actor) {
           await actor.createRoom(
             code,
@@ -303,7 +336,7 @@ export default function App() {
       setJoinError("");
 
       try {
-        const actor = (window as any).backendActor;
+        const actor = await waitForActor();
         if (!actor) {
           setJoinError("Backend not available. Try again.");
           setIsJoining(false);
@@ -369,10 +402,15 @@ export default function App() {
     }
     setMapType(type);
 
-    const newObstacles =
-      type === "2d-platformer"
-        ? generatePlatformerMap(seed)
-        : generateMap(seed);
+    let newObstacles: ObstacleBox[];
+    let newPosterAnchors: PosterAnchor[] = [];
+    if (type === "2d-platformer") {
+      newObstacles = generatePlatformerMap(seed);
+    } else {
+      const result = generateMap(seed);
+      newObstacles = result.obstacles;
+      newPosterAnchors = result.posterAnchors;
+    }
 
     // Notify backend that game started
     try {
@@ -400,6 +438,7 @@ export default function App() {
     }));
 
     setObstacles(newObstacles);
+    setPosterAnchors(newPosterAnchors);
     setGamePlayers(playersWithIT);
     setScreen("game");
   }, [lobbyPlayers, selectedMapType, roomCode, localPlayerId, stopLobbyPoll]);
@@ -532,6 +571,8 @@ export default function App() {
           onJoinRoom={handleJoinRoom}
           sensitivity={sensitivity}
           onSensitivityChange={setSensitivity}
+          graphicsQuality={graphicsQuality}
+          onGraphicsChange={setGraphicsQuality}
           joinError={joinError}
           isJoining={isJoining}
         />
@@ -557,6 +598,7 @@ export default function App() {
         <GameScreen
           initialPlayers={gamePlayers}
           obstacles={obstacles}
+          posterAnchors={posterAnchors}
           onGameEnd={handleGameEnd}
           isHost={isHost}
           onKickPlayer={handleKickGamePlayer}
@@ -564,6 +606,7 @@ export default function App() {
           controlMode={controlMode}
           gameDuration={gameDuration}
           sensitivity={sensitivity}
+          graphicsQuality={graphicsQuality}
         />
       )}
       {screen === "end" && (

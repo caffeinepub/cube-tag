@@ -81,6 +81,8 @@ interface HomeScreenProps {
   ) => void;
   sensitivity?: number;
   onSensitivityChange?: (val: number) => void;
+  graphicsQuality?: "fast" | "medium" | "high";
+  onGraphicsChange?: (q: "fast" | "medium" | "high") => void;
   joinError?: string;
   isJoining?: boolean;
 }
@@ -90,6 +92,8 @@ export function HomeScreen({
   onJoinRoom,
   sensitivity,
   onSensitivityChange,
+  graphicsQuality = "medium",
+  onGraphicsChange,
   joinError,
   isJoining,
 }: HomeScreenProps) {
@@ -267,6 +271,71 @@ export function HomeScreen({
                   onValueChange={(v) => onSensitivityChange?.(v[0])}
                   className="w-full"
                 />
+              </div>
+
+              {/* Graphics Quality Picker */}
+              <div className="space-y-2">
+                <Label className="text-xs tracking-widest uppercase text-muted-foreground">
+                  Graphics Quality
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      {
+                        key: "fast",
+                        label: "Fast",
+                        desc: "No shaders, max performance",
+                        color: "oklch(0.75 0.22 140)",
+                      },
+                      {
+                        key: "medium",
+                        label: "Medium",
+                        desc: "Balanced (recommended)",
+                        color: "oklch(0.82 0.18 195)",
+                      },
+                      {
+                        key: "high",
+                        label: "High",
+                        desc: "Full shaders & shadows",
+                        color: "oklch(0.72 0.25 310)",
+                      },
+                    ] as const
+                  ).map(({ key, label, desc, color }) => {
+                    const isActive = graphicsQuality === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => onGraphicsChange?.(key)}
+                        className="relative rounded-lg p-2.5 text-center cursor-pointer transition-all duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        style={{
+                          background: isActive
+                            ? `oklch(from ${color} l c h / 0.15)`
+                            : "oklch(0.14 0.03 260 / 0.6)",
+                          border: `1px solid ${isActive ? color : "oklch(0.35 0.05 260 / 0.4)"}`,
+                          boxShadow: isActive
+                            ? `0 0 10px ${color}40`
+                            : undefined,
+                        }}
+                      >
+                        <div
+                          className="text-xs font-black tracking-wide mb-0.5"
+                          style={{
+                            color: isActive ? color : "oklch(0.65 0.05 260)",
+                          }}
+                        >
+                          {label}
+                        </div>
+                        <div
+                          className="text-[10px] leading-tight"
+                          style={{ color: "oklch(0.5 0.04 260)" }}
+                        >
+                          {desc}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <Button

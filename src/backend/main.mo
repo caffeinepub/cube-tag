@@ -6,9 +6,9 @@ import Order "mo:core/Order";
 import Bool "mo:core/Bool";
 import Int "mo:core/Int";
 import Float "mo:core/Float";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   type Player = {
     playerId : Text;

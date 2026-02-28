@@ -8,7 +8,12 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ObstacleBox, PlayerState } from "../types/game";
+import type {
+  GraphicsQuality,
+  ObstacleBox,
+  PlayerState,
+  PosterAnchor,
+} from "../types/game";
 import { Scene } from "./game/Scene";
 import { useGameLoopLogic } from "./game/useGameLoop";
 
@@ -159,6 +164,7 @@ function MobileControls({ keysRef, is2D }: MobileControlsProps) {
 interface GameScreenProps {
   initialPlayers: PlayerState[];
   obstacles: ObstacleBox[];
+  posterAnchors?: PosterAnchor[];
   onGameEnd: (players: PlayerState[], winners: string[]) => void;
   isHost?: boolean;
   onKickPlayer?: (id: string) => void;
@@ -166,11 +172,13 @@ interface GameScreenProps {
   controlMode?: "pc" | "mobile";
   gameDuration?: number;
   sensitivity?: number;
+  graphicsQuality?: GraphicsQuality;
 }
 
 export function GameScreen({
   initialPlayers,
   obstacles,
+  posterAnchors,
   onGameEnd,
   isHost = false,
   onKickPlayer,
@@ -178,6 +186,7 @@ export function GameScreen({
   controlMode = "pc",
   gameDuration = 100,
   sensitivity = 1,
+  graphicsQuality = "medium",
 }: GameScreenProps) {
   const [players, setPlayers] = useState<PlayerState[]>(initialPlayers);
   const [timeRemaining, setTimeRemaining] = useState(gameDuration);
@@ -288,20 +297,24 @@ export function GameScreen({
     <div className="relative w-screen h-screen overflow-hidden bg-game-deep">
       {/* 3D Canvas */}
       <Canvas
-        shadows
+        shadows={graphicsQuality === "high"}
         style={{
           position: "absolute",
           inset: 0,
           width: "100%",
           height: "100%",
         }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
+        gl={{
+          antialias: graphicsQuality === "high",
+          powerPreference: "high-performance",
+        }}
         camera={{ fov: 75, near: 0.1, far: 1000, position: [0, 0.9, 0] }}
         frameloop="always"
       >
         <Scene
           players={players}
           obstacles={obstacles}
+          posterAnchors={posterAnchors}
           keysRef={keysRef}
           onFrame={updateFrame}
           onPlayersUpdate={handlePlayersUpdate}
@@ -310,6 +323,7 @@ export function GameScreen({
           onPointerLockChange={setIsPointerLocked}
           controlMode={controlMode}
           sensitivity={sensitivity}
+          graphicsQuality={graphicsQuality}
         />
       </Canvas>
 
