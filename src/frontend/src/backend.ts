@@ -109,31 +109,33 @@ export interface RoomView {
     timeRemaining: bigint;
     hostId: string;
     roomCode: string;
+    roomName: string;
 }
 export interface backendInterface {
-    createRoom(roomCode: string, hostId: string, hostName: string, hostColor: string, mapSeed: bigint, gameDuration: bigint, selectedMapType: string): Promise<RoomView>;
+    createRoom(roomCode: string, hostId: string, hostName: string, hostColor: string, mapSeed: bigint, gameDuration: bigint, selectedMapType: string, roomName: string): Promise<RoomView>;
     getAllRooms(): Promise<Array<RoomView>>;
     getRoomState(roomCode: string): Promise<RoomView | null>;
     joinRoom(roomCode: string, playerId: string, playerName: string, playerColor: string): Promise<RoomView | null>;
     kickPlayer(roomCode: string, requesterId: string, targetId: string): Promise<boolean>;
     leaveRoom(roomCode: string, playerId: string): Promise<boolean>;
+    listOpenRooms(): Promise<Array<RoomView>>;
     startGame(roomCode: string, requesterId: string, mapSeed: bigint, mapType: string): Promise<boolean>;
     updateRoomSettings(roomCode: string, requesterId: string, gameDuration: bigint, selectedMapType: string): Promise<boolean>;
 }
 import type { RoomView as _RoomView } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
-    async createRoom(arg0: string, arg1: string, arg2: string, arg3: string, arg4: bigint, arg5: bigint, arg6: string): Promise<RoomView> {
+    async createRoom(arg0: string, arg1: string, arg2: string, arg3: string, arg4: bigint, arg5: bigint, arg6: string, arg7: string): Promise<RoomView> {
         if (this.processError) {
             try {
-                const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
+                const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
+            const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7);
             return result;
         }
     }
@@ -204,6 +206,20 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.leaveRoom(arg0, arg1);
+            return result;
+        }
+    }
+    async listOpenRooms(): Promise<Array<RoomView>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.listOpenRooms();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.listOpenRooms();
             return result;
         }
     }

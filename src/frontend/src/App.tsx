@@ -130,6 +130,7 @@ export default function App() {
 
   const [screen, setScreen] = useState<GameScreenType>("home");
   const [roomCode, setRoomCode] = useState("");
+  const [roomName, setRoomName] = useState("");
   const [isHost, setIsHost] = useState(false);
   const [playerName, setPlayerName] = useState("");
   const [localPlayerId, setLocalPlayerId] = useState("");
@@ -290,7 +291,7 @@ export default function App() {
   );
 
   const handleCreateRoom = useCallback(
-    async (name: string, mode: "pc" | "mobile") => {
+    async (name: string, rName: string, mode: "pc" | "mobile") => {
       const pid = getOrCreatePlayerId();
       const code = generateRoomCode();
       const color = PLAYER_COLORS[0];
@@ -298,6 +299,7 @@ export default function App() {
       setLocalPlayerId(pid);
       setPlayerName(name);
       setRoomCode(code);
+      setRoomName(rName);
       setIsHost(true);
       setControlMode(mode);
       setJoinError("");
@@ -320,6 +322,7 @@ export default function App() {
             BigInt(0),
             BigInt(gameDuration),
             selectedMapType,
+            rName,
           );
         }
       } catch (err) {
@@ -332,6 +335,17 @@ export default function App() {
     [gameDuration, selectedMapType, startLobbyPoll],
   );
 
+  const handleFetchRooms = useCallback(async () => {
+    try {
+      const act = await waitForActor();
+      if (!act) return [];
+      const rooms = await act.listOpenRooms();
+      return Array.isArray(rooms) ? rooms : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   const handleJoinRoom = useCallback(
     async (name: string, code: string, mode: "pc" | "mobile") => {
       const pid = getOrCreatePlayerId();
@@ -343,7 +357,7 @@ export default function App() {
       try {
         const actor = await waitForActor();
         if (!actor) {
-          setJoinError("Backend not available. Try again.");
+          setJoinError("Unable to join room");
           setIsJoining(false);
           return;
         }
@@ -356,9 +370,7 @@ export default function App() {
             : (roomViewResult ?? null);
 
         if (!roomView) {
-          setJoinError(
-            "Room not found or already started. Check the code and try again.",
-          );
+          setJoinError("Unable to join room");
           setIsJoining(false);
           return;
         }
@@ -367,6 +379,7 @@ export default function App() {
         setLocalPlayerId(pid);
         setPlayerName(name);
         setRoomCode(code);
+        setRoomName(roomView.roomName ?? "");
         setIsHost(false);
         setControlMode(mode);
         setHumanPlayerCount(roomView.players.length);
@@ -397,7 +410,7 @@ export default function App() {
         startLobbyPoll(code, pid, name, color, false);
       } catch (err) {
         console.error("joinRoom error:", err);
-        setJoinError("Failed to join room. Check the code and try again.");
+        setJoinError("Unable to join room");
       } finally {
         setIsJoining(false);
       }
@@ -488,6 +501,7 @@ export default function App() {
 
     setScreen("home");
     setRoomCode("");
+    setRoomName("");
     setIsHost(false);
     setPlayerName("");
     setLocalPlayerId("");
@@ -582,6 +596,7 @@ export default function App() {
         <HomeScreen
           onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
+          onFetchRooms={handleFetchRooms}
           sensitivity={sensitivity}
           onSensitivityChange={setSensitivity}
           graphicsQuality={graphicsQuality}
@@ -593,6 +608,7 @@ export default function App() {
       {screen === "lobby" && (
         <LobbyScreen
           roomCode={roomCode}
+          roomName={roomName}
           isHost={isHost}
           playerName={playerName}
           players={lobbyPlayers}

@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RoomView } from "../types/game";
 
 const DECO_CUBES = [
   {
@@ -73,12 +74,17 @@ const DECO_CUBES = [
 ];
 
 interface HomeScreenProps {
-  onCreateRoom: (playerName: string, controlMode: "pc" | "mobile") => void;
+  onCreateRoom: (
+    playerName: string,
+    roomName: string,
+    controlMode: "pc" | "mobile",
+  ) => void;
   onJoinRoom: (
     playerName: string,
     roomCode: string,
     controlMode: "pc" | "mobile",
   ) => void;
+  onFetchRooms?: () => Promise<RoomView[]>;
   sensitivity?: number;
   onSensitivityChange?: (val: number) => void;
   graphicsQuality?: "fast" | "medium" | "high";
@@ -90,6 +96,7 @@ interface HomeScreenProps {
 export function HomeScreen({
   onCreateRoom,
   onJoinRoom,
+  onFetchRooms,
   sensitivity,
   onSensitivityChange,
   graphicsQuality = "medium",
@@ -98,10 +105,54 @@ export function HomeScreen({
   isJoining,
 }: HomeScreenProps) {
   const [playerName, setPlayerName] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [mode, setMode] = useState<"main" | "join" | "controls">("main");
+  const [roomName, setRoomName] = useState("");
+  const [mode, setMode] = useState<
+    "main" | "browse" | "create-name" | "controls"
+  >("main");
   const [error, setError] = useState("");
-  const pendingAction = useRef<"create" | "join">("create");
+
+  // Browse state
+  const [openRooms, setOpenRooms] = useState<RoomView[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [showCodeFallback, setShowCodeFallback] = useState(false);
+  const [fallbackCode, setFallbackCode] = useState("");
+  const [pendingRoomCode, setPendingRoomCode] = useState("");
+
+  const pendingAction = useRef<"create" | "browse-join">("create");
+  const browseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch rooms
+  const fetchRooms = useCallback(async () => {
+    if (!onFetchRooms) return;
+    setRoomsLoading(true);
+    try {
+      const rooms = await onFetchRooms();
+      setOpenRooms(rooms);
+    } catch {
+      // silently fail
+    } finally {
+      setRoomsLoading(false);
+    }
+  }, [onFetchRooms]);
+
+  // Auto-refresh rooms every 3s while in browse mode
+  useEffect(() => {
+    if (mode === "browse") {
+      fetchRooms();
+      browseIntervalRef.current = setInterval(fetchRooms, 3000);
+    } else {
+      if (browseIntervalRef.current) {
+        clearInterval(browseIntervalRef.current);
+        browseIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (browseIntervalRef.current) {
+        clearInterval(browseIntervalRef.current);
+        browseIntervalRef.current = null;
+      }
+    };
+  }, [mode, fetchRooms]);
 
   const handleCreate = () => {
     if (!playerName.trim()) {
@@ -109,46 +160,80 @@ export function HomeScreen({
       return;
     }
     pendingAction.current = "create";
+    setMode("create-name");
+  };
+
+  const handleContinueCreateName = () => {
+    if (!roomName.trim()) {
+      setError("Enter a room name!");
+      return;
+    }
     setMode("controls");
   };
 
-  const handleJoin = () => {
+  const handleBrowseJoin = (code: string) => {
     if (!playerName.trim()) {
       setError("Enter your name first!");
+      setMode("main");
       return;
     }
-    if (!joinCode.trim() || joinCode.trim().length < 4) {
+    setPendingRoomCode(code);
+    pendingAction.current = "browse-join";
+    setMode("controls");
+  };
+
+  const handleFallbackJoin = () => {
+    if (!playerName.trim()) {
+      setError("Enter your name first!");
+      setMode("main");
+      return;
+    }
+    if (!fallbackCode.trim() || fallbackCode.trim().length < 4) {
       setError("Enter a valid room code!");
       return;
     }
-    pendingAction.current = "join";
+    setPendingRoomCode(fallbackCode.trim().toUpperCase());
+    pendingAction.current = "browse-join";
     setMode("controls");
   };
 
   const handleSelectControl = (controlMode: "pc" | "mobile") => {
     if (pendingAction.current === "create") {
-      onCreateRoom(playerName.trim(), controlMode);
+      onCreateRoom(playerName.trim(), roomName.trim(), controlMode);
     } else {
-      onJoinRoom(playerName.trim(), joinCode.trim().toUpperCase(), controlMode);
+      onJoinRoom(playerName.trim(), pendingRoomCode, controlMode);
     }
   };
 
-  // When a backend join error arrives, go back to the join screen so user sees it
+  // When a backend join error arrives, go back to browse screen so user sees it
   useEffect(() => {
-    if (joinError && mode === "controls" && pendingAction.current === "join") {
-      setMode("join");
+    if (
+      joinError &&
+      mode === "controls" &&
+      pendingAction.current === "browse-join"
+    ) {
+      setMode("browse");
     }
   }, [joinError, mode]);
 
-  // Show backend join error when it arrives
-  const displayError = error || joinError || "";
+  const displayError = error || "";
 
   const handleBackFromControls = () => {
-    setMode(pendingAction.current === "join" ? "join" : "main");
+    if (pendingAction.current === "browse-join") {
+      setMode("browse");
+    } else {
+      setMode("create-name");
+    }
+  };
+
+  const mapTypeBadge = (type: string) => {
+    if (type === "3d") return "3D";
+    if (type === "2d-platformer") return "2D";
+    return "RAND";
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-game-deep flex items-center justify-center scanlines">
+    <div className="relative min-h-screen w-full bg-game-deep flex items-center justify-center scanlines overflow-y-auto">
       {/* Animated grid background */}
       <div className="absolute inset-0 grid-bg opacity-60" />
 
@@ -179,7 +264,7 @@ export function HomeScreen({
       </div>
 
       <motion.div
-        className="relative z-10 w-full max-w-md px-6"
+        className="relative z-10 w-full max-w-md px-6 py-8"
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: "easeOut" }}
@@ -202,7 +287,7 @@ export function HomeScreen({
             <div className="w-8 h-8 bg-game-it rounded-sm -rotate-12 shadow-neon-it" />
           </div>
           <p className="text-muted-foreground text-sm tracking-widest uppercase">
-            100 seconds. Don&apos;t be IT.
+            Don&apos;t be IT.
           </p>
         </motion.div>
 
@@ -214,7 +299,7 @@ export function HomeScreen({
           transition={{ duration: 0.5, delay: 0.2 }}
         >
           {mode !== "controls" && (
-            /* Player Name Input — shown on main and join screens */
+            /* Player Name Input — shown on all non-controls screens */
             <div className="space-y-2">
               <Label
                 className="text-xs tracking-widest uppercase text-muted-foreground"
@@ -237,17 +322,22 @@ export function HomeScreen({
             </div>
           )}
 
-          {(displayError || joinError) && (
-            <motion.p
-              className="text-sm"
-              style={{ color: "oklch(0.65 0.28 25)" }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-            >
-              ⚠ {displayError || joinError}
-            </motion.p>
-          )}
+          <AnimatePresence mode="wait">
+            {displayError && (
+              <motion.p
+                key="local-err"
+                className="text-sm"
+                style={{ color: "oklch(0.65 0.28 25)" }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                ⚠ {displayError}
+              </motion.p>
+            )}
+          </AnimatePresence>
 
+          {/* ── MAIN MODE ── */}
           {mode === "main" && (
             <div className="space-y-3">
               {/* Look Sensitivity slider */}
@@ -351,14 +441,22 @@ export function HomeScreen({
               <Button
                 variant="outline"
                 className="w-full h-12 text-base font-bold tracking-wide border-border hover:bg-secondary"
-                onClick={() => setMode("join")}
+                onClick={() => {
+                  if (!playerName.trim()) {
+                    setError("Enter your name first!");
+                    return;
+                  }
+                  setError("");
+                  setMode("browse");
+                }}
               >
-                🔗 Join Room
+                🌐 Browse Rooms
               </Button>
             </div>
           )}
 
-          {mode === "join" && (
+          {/* ── CREATE-NAME MODE ── */}
+          {mode === "create-name" && (
             <motion.div
               className="space-y-3"
               initial={{ opacity: 0, x: 20 }}
@@ -368,40 +466,45 @@ export function HomeScreen({
               <div className="space-y-2">
                 <Label
                   className="text-xs tracking-widest uppercase text-muted-foreground"
-                  htmlFor="room-code"
+                  htmlFor="room-name"
                 >
-                  Room Code
+                  Room Name
                 </Label>
                 <Input
-                  id="room-code"
-                  placeholder="e.g. ABC123"
-                  value={joinCode}
+                  id="room-name"
+                  placeholder="e.g. Mike's Room"
+                  value={roomName}
                   onChange={(e) => {
-                    setJoinCode(e.target.value.toUpperCase());
+                    setRoomName(e.target.value);
                     setError("");
                   }}
-                  maxLength={8}
-                  className="bg-secondary border-border text-foreground placeholder:text-muted-foreground font-mono text-center text-xl tracking-widest h-12 uppercase"
-                  onKeyDown={(e) => e.key === "Enter" && handleJoin()}
+                  maxLength={24}
+                  className="bg-secondary border-border text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-0 h-11"
+                  onKeyDown={(e) =>
+                    e.key === "Enter" && handleContinueCreateName()
+                  }
+                  autoFocus
                 />
+                <p className="text-xs text-muted-foreground">
+                  This is what others will see in the room browser.
+                </p>
               </div>
               <Button
-                className="w-full h-12 text-base font-bold tracking-wide"
+                className="w-full h-12 text-base font-bold tracking-wide neon-border-cyan"
                 style={{
-                  background: "oklch(0.75 0.22 140)",
-                  color: "oklch(0.1 0.02 140)",
+                  background: "oklch(0.82 0.18 195)",
+                  color: "oklch(0.1 0.02 260)",
                 }}
-                onClick={handleJoin}
-                disabled={isJoining}
+                onClick={handleContinueCreateName}
               >
-                {isJoining ? "⏳ Joining..." : "🎮 Join Game"}
+                Continue →
               </Button>
               <Button
                 variant="ghost"
                 className="w-full text-muted-foreground hover:text-foreground"
                 onClick={() => {
-                  setMode("main");
                   setError("");
+                  setMode("main");
                 }}
               >
                 ← Back
@@ -409,6 +512,194 @@ export function HomeScreen({
             </motion.div>
           )}
 
+          {/* ── BROWSE MODE ── */}
+          {mode === "browse" && (
+            <motion.div
+              className="space-y-3"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <div className="flex items-center justify-between">
+                <Label className="text-xs tracking-widest uppercase text-muted-foreground">
+                  Open Rooms
+                </Label>
+                {roomsLoading && (
+                  <div
+                    className="w-3 h-3 rounded-full animate-pulse"
+                    style={{ background: "oklch(0.82 0.18 195)" }}
+                  />
+                )}
+              </div>
+
+              {/* Join error */}
+              <AnimatePresence>
+                {joinError && (
+                  <motion.p
+                    key="join-err"
+                    className="text-sm font-medium"
+                    style={{ color: "oklch(0.65 0.28 25)" }}
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    ⚠ Unable to join room
+                  </motion.p>
+                )}
+              </AnimatePresence>
+
+              {/* Room list */}
+              <div
+                className="space-y-2 overflow-y-auto pr-1"
+                style={{ maxHeight: "260px" }}
+              >
+                {roomsLoading && openRooms.length === 0 ? (
+                  /* Loading skeletons */
+                  [0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="rounded-lg p-3 animate-pulse"
+                      style={{
+                        background: "oklch(0.14 0.03 260 / 0.6)",
+                        border: "1px solid oklch(0.35 0.05 260 / 0.4)",
+                        height: "60px",
+                      }}
+                    />
+                  ))
+                ) : openRooms.length === 0 ? (
+                  <div className="text-center py-6 space-y-1">
+                    <p className="text-2xl">🕹️</p>
+                    <p className="text-sm text-muted-foreground">
+                      No open rooms yet.
+                    </p>
+                    <p className="text-xs text-muted-foreground opacity-70">
+                      Be the first to create one!
+                    </p>
+                  </div>
+                ) : (
+                  openRooms.map((room) => (
+                    <motion.div
+                      key={room.roomCode}
+                      className="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-150 group"
+                      style={{
+                        background: "oklch(0.14 0.03 260 / 0.6)",
+                        border: "1px solid oklch(0.35 0.05 260 / 0.4)",
+                      }}
+                      whileHover={{
+                        borderColor: "oklch(0.82 0.18 195 / 0.6)",
+                        boxShadow: "0 0 12px oklch(0.82 0.18 195 / 0.2)",
+                      }}
+                    >
+                      {/* Room info */}
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="text-sm font-bold truncate"
+                          style={{ color: "oklch(0.9 0.06 220)" }}
+                        >
+                          {room.roomName || room.roomCode}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            👥 {room.players.length}/10
+                          </span>
+                          <span
+                            className="text-[10px] font-black px-1.5 py-0.5 rounded"
+                            style={{
+                              background: "oklch(0.82 0.18 195 / 0.15)",
+                              color: "oklch(0.82 0.18 195)",
+                              border: "1px solid oklch(0.82 0.18 195 / 0.3)",
+                            }}
+                          >
+                            {mapTypeBadge(room.selectedMapType)}
+                          </span>
+                        </div>
+                      </div>
+                      {/* Join button */}
+                      <button
+                        type="button"
+                        className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-black tracking-wide transition-all duration-150 active:scale-95"
+                        style={{
+                          background: "oklch(0.75 0.22 140)",
+                          color: "oklch(0.1 0.02 140)",
+                        }}
+                        onClick={() => handleBrowseJoin(room.roomCode)}
+                        disabled={isJoining}
+                      >
+                        {isJoining ? "..." : "Join →"}
+                      </button>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+
+              {/* Have a code? fallback */}
+              <div
+                className="rounded-lg overflow-hidden transition-all duration-200"
+                style={{
+                  border: "1px solid oklch(0.35 0.05 260 / 0.3)",
+                }}
+              >
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-xs text-muted-foreground hover:text-foreground text-left flex items-center gap-2 transition-colors"
+                  onClick={() => setShowCodeFallback((v) => !v)}
+                >
+                  <span>{showCodeFallback ? "▾" : "▸"}</span>
+                  Have a room code?
+                </button>
+                <AnimatePresence>
+                  {showCodeFallback && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="flex gap-2 px-3 pb-3">
+                        <Input
+                          placeholder="XXXXXX"
+                          value={fallbackCode}
+                          onChange={(e) =>
+                            setFallbackCode(e.target.value.toUpperCase())
+                          }
+                          maxLength={8}
+                          className="bg-secondary border-border text-foreground placeholder:text-muted-foreground font-mono text-center text-sm tracking-widest h-9 uppercase flex-1"
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleFallbackJoin()
+                          }
+                        />
+                        <Button
+                          className="h-9 px-4 text-sm font-bold"
+                          style={{
+                            background: "oklch(0.75 0.22 140)",
+                            color: "oklch(0.1 0.02 140)",
+                          }}
+                          onClick={handleFallbackJoin}
+                          disabled={isJoining}
+                        >
+                          {isJoining ? "..." : "Join"}
+                        </Button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  setError("");
+                  setMode("main");
+                }}
+              >
+                ← Back
+              </Button>
+            </motion.div>
+          )}
+
+          {/* ── CONTROLS MODE ── */}
           {mode === "controls" && (
             <motion.div
               className="space-y-5"
@@ -449,7 +740,6 @@ export function HomeScreen({
                     e.key === "Enter" && handleSelectControl("pc")
                   }
                 >
-                  {/* Hover glow */}
                   <div
                     className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
                     style={{
@@ -458,7 +748,6 @@ export function HomeScreen({
                         "0 0 16px oklch(0.82 0.18 195 / 0.35), inset 0 0 20px oklch(0.82 0.18 195 / 0.05)",
                     }}
                   />
-                  {/* Icon */}
                   <div className="text-4xl mb-3 leading-none">⌨️</div>
                   <div
                     className="text-sm font-black tracking-wide mb-1"
@@ -485,7 +774,6 @@ export function HomeScreen({
                     e.key === "Enter" && handleSelectControl("mobile")
                   }
                 >
-                  {/* Hover glow */}
                   <div
                     className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none"
                     style={{
@@ -494,7 +782,6 @@ export function HomeScreen({
                         "0 0 16px oklch(0.75 0.22 140 / 0.35), inset 0 0 20px oklch(0.75 0.22 140 / 0.05)",
                     }}
                   />
-                  {/* Icon */}
                   <div className="text-4xl mb-3 leading-none">📱</div>
                   <div
                     className="text-sm font-black tracking-wide mb-1"
@@ -531,7 +818,7 @@ export function HomeScreen({
               🎮 WASD or Arrow Keys to move
             </p>
             <p className="text-xs text-muted-foreground">
-              Tag other players to pass IT · Survive 100 seconds
+              Tag other players to pass IT · Survive the timer
             </p>
           </motion.div>
         )}

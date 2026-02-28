@@ -4,6 +4,7 @@ import type { PlayerState } from "../types/game";
 
 interface LobbyScreenProps {
   roomCode: string;
+  roomName?: string;
   isHost: boolean;
   playerName: string;
   players: PlayerState[];
@@ -29,6 +30,7 @@ const MAP_TYPE_OPTIONS: {
 
 export function LobbyScreen({
   roomCode,
+  roomName,
   isHost,
   players,
   humanPlayerCount = 1,
@@ -74,15 +76,37 @@ export function LobbyScreen({
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <p className="text-xs tracking-widest uppercase text-muted-foreground mb-2">
-            Room Code
-          </p>
-          <div
-            className="text-5xl font-display font-black tracking-widest text-glow-cyan"
-            style={{ color: "oklch(0.82 0.18 195)" }}
-          >
-            {roomCode}
-          </div>
+          {roomName ? (
+            <>
+              <div
+                className="text-2xl font-display font-black tracking-tight text-glow-cyan mb-1"
+                style={{ color: "oklch(0.82 0.18 195)" }}
+              >
+                {roomName}
+              </div>
+              <p className="text-xs tracking-widest uppercase text-muted-foreground mb-1">
+                Code
+              </p>
+              <div
+                className="text-3xl font-display font-black tracking-widest"
+                style={{ color: "oklch(0.75 0.14 220)" }}
+              >
+                {roomCode}
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs tracking-widest uppercase text-muted-foreground mb-2">
+                Room Code
+              </p>
+              <div
+                className="text-5xl font-display font-black tracking-widest text-glow-cyan"
+                style={{ color: "oklch(0.82 0.18 195)" }}
+              >
+                {roomCode}
+              </div>
+            </>
+          )}
           <p className="text-xs text-muted-foreground mt-2">
             Share this code with friends
           </p>

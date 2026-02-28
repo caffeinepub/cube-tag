@@ -28,11 +28,21 @@ export const RoomView = IDL.Record({
   'timeRemaining' : IDL.Int,
   'hostId' : IDL.Text,
   'roomCode' : IDL.Text,
+  'roomName' : IDL.Text,
 });
 
 export const idlService = IDL.Service({
   'createRoom' : IDL.Func(
-      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Int, IDL.Int, IDL.Text],
+      [
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Text,
+        IDL.Int,
+        IDL.Int,
+        IDL.Text,
+        IDL.Text,
+      ],
       [RoomView],
       [],
     ),
@@ -45,6 +55,7 @@ export const idlService = IDL.Service({
     ),
   'kickPlayer' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
   'leaveRoom' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'listOpenRooms' : IDL.Func([], [IDL.Vec(RoomView)], ['query']),
   'startGame' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
       [IDL.Bool],
@@ -80,11 +91,21 @@ export const idlFactory = ({ IDL }) => {
     'timeRemaining' : IDL.Int,
     'hostId' : IDL.Text,
     'roomCode' : IDL.Text,
+    'roomName' : IDL.Text,
   });
   
   return IDL.Service({
     'createRoom' : IDL.Func(
-        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Int, IDL.Int, IDL.Text],
+        [
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Text,
+          IDL.Int,
+          IDL.Int,
+          IDL.Text,
+          IDL.Text,
+        ],
         [RoomView],
         [],
       ),
@@ -97,6 +118,7 @@ export const idlFactory = ({ IDL }) => {
       ),
     'kickPlayer' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
     'leaveRoom' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'listOpenRooms' : IDL.Func([], [IDL.Vec(RoomView)], ['query']),
     'startGame' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
         [IDL.Bool],

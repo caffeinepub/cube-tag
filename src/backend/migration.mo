@@ -1,6 +1,5 @@
 import Map "mo:core/Map";
 import Text "mo:core/Text";
-import Int "mo:core/Int";
 
 module {
   type Player = {
@@ -18,35 +17,39 @@ module {
     roomCode : Text;
     hostId : Text;
     mapSeed : Int;
+    gameDuration : Int;
+    selectedMapType : Text;
     timeRemaining : Int;
-    status : Text;
+    status : Text; // "lobby", "playing", "ended"
     players : Map.Map<Text, Player>;
     lastActivity : Int;
   };
 
+  type OldActor = {
+    rooms : Map.Map<Text, OldRoom>;
+  };
+
   type NewRoom = {
     roomCode : Text;
+    roomName : Text;
     hostId : Text;
     mapSeed : Int;
     gameDuration : Int;
     selectedMapType : Text;
     timeRemaining : Int;
-    status : Text;
+    status : Text; // "lobby", "playing", "ended"
     players : Map.Map<Text, Player>;
     lastActivity : Int;
   };
 
-  type OldState = { rooms : Map.Map<Text, OldRoom> };
-  type NewState = { rooms : Map.Map<Text, NewRoom> };
+  type NewActor = {
+    rooms : Map.Map<Text, NewRoom>;
+  };
 
-  public func run(old : OldState) : NewState {
+  public func run(old : OldActor) : NewActor {
     let newRooms = old.rooms.map<Text, OldRoom, NewRoom>(
-      func(_roomCode, oldRoom) {
-        {
-          oldRoom with
-          gameDuration = 300; // Default 5 minutes for old rooms
-          selectedMapType = "default";
-        };
+      func(_code, oldRoom) {
+        { oldRoom with roomName = "(unnamed room)" };
       }
     );
     { rooms = newRooms };

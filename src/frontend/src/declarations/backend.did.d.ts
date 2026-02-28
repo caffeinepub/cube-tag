@@ -30,10 +30,11 @@ export interface RoomView {
   'timeRemaining' : bigint,
   'hostId' : string,
   'roomCode' : string,
+  'roomName' : string,
 }
 export interface _SERVICE {
   'createRoom' : ActorMethod<
-    [string, string, string, string, bigint, bigint, string],
+    [string, string, string, string, bigint, bigint, string, string],
     RoomView
   >,
   'getAllRooms' : ActorMethod<[], Array<RoomView>>,
@@ -41,6 +42,7 @@ export interface _SERVICE {
   'joinRoom' : ActorMethod<[string, string, string, string], [] | [RoomView]>,
   'kickPlayer' : ActorMethod<[string, string, string], boolean>,
   'leaveRoom' : ActorMethod<[string, string], boolean>,
+  'listOpenRooms' : ActorMethod<[], Array<RoomView>>,
   'startGame' : ActorMethod<[string, string, bigint, string], boolean>,
   'updateRoomSettings' : ActorMethod<[string, string, bigint, string], boolean>,
 }

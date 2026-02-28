@@ -6,9 +6,10 @@ import Order "mo:core/Order";
 import Bool "mo:core/Bool";
 import Int "mo:core/Int";
 import Float "mo:core/Float";
+import Migration "migration";
 
-
-
+// Added Migration for data persistence and upgrades
+(with migration = Migration.run)
 actor {
   type Player = {
     playerId : Text;
@@ -29,6 +30,7 @@ actor {
 
   type Room = {
     roomCode : Text;
+    roomName : Text;
     hostId : Text;
     mapSeed : Int;
     gameDuration : Int;
@@ -41,6 +43,7 @@ actor {
 
   type RoomView = {
     roomCode : Text;
+    roomName : Text;
     hostId : Text;
     mapSeed : Int;
     gameDuration : Int;
@@ -55,6 +58,10 @@ actor {
     public func compareByCode(r1 : RoomView, r2 : RoomView) : Order.Order {
       Text.compare(r1.roomCode, r2.roomCode);
     };
+
+    public func compareByLastActivity(r1 : RoomView, r2 : RoomView) : Order.Order {
+      Int.compare(r2.lastActivity, r1.lastActivity); // newest first
+    };
   };
 
   let rooms = Map.empty<Text, Room>();
@@ -62,6 +69,7 @@ actor {
   func toRoomView(room : Room) : RoomView {
     {
       roomCode = room.roomCode;
+      roomName = room.roomName;
       hostId = room.hostId;
       mapSeed = room.mapSeed;
       gameDuration = room.gameDuration;
@@ -81,6 +89,7 @@ actor {
     mapSeed : Int,
     gameDuration : Int,
     selectedMapType : Text,
+    roomName : Text,
   ) : async RoomView {
     let hostPlayer : Player = {
       playerId = hostId;
@@ -98,6 +107,7 @@ actor {
 
     let room : Room = {
       roomCode;
+      roomName;
       hostId;
       mapSeed;
       gameDuration;
@@ -212,5 +222,12 @@ actor {
 
   public query ({ caller }) func getAllRooms() : async [RoomView] {
     rooms.values().map<Room, RoomView>(toRoomView).toArray().sort(RoomView.compareByCode);
+  };
+
+  public query ({ caller }) func listOpenRooms() : async [RoomView] {
+    let openRooms = rooms.values().filter(
+      func(room) { room.status == "lobby" }
+    ).map(toRoomView);
+    openRooms.toArray().sort(RoomView.compareByLastActivity);
   };
 };

@@ -1,5 +1,28 @@
 export type GameScreen = "home" | "lobby" | "game" | "end";
 
+/** Mirrors the RoomView shape returned by the Motoko backend */
+export interface RoomView {
+  roomCode: string;
+  roomName: string;
+  hostId: string;
+  status: string;
+  players: Array<{
+    playerId: string;
+    playerName: string;
+    color: string;
+    x: number;
+    y: number;
+    z: number;
+    isIT: boolean;
+    isAlive: boolean;
+  }>;
+  mapSeed: bigint;
+  gameDuration: bigint;
+  selectedMapType: string;
+  timeRemaining: bigint;
+  lastActivity: bigint;
+}
+
 export type GraphicsQuality = "fast" | "medium" | "high";
 
 export interface Vec3 {
