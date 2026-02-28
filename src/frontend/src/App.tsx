@@ -190,7 +190,12 @@ export default function App() {
         try {
           const actor = (window as any).backendActor;
           if (!actor) return;
-          const roomView = await actor.getRoomState(code);
+          const roomViewResult = await actor.getRoomState(code);
+          // Candid returns optionals as arrays: [] = null, [value] = some
+          const roomView =
+            Array.isArray(roomViewResult) && roomViewResult.length > 0
+              ? roomViewResult[0]
+              : (roomViewResult ?? null);
           if (!roomView) return;
 
           // Update duration/mapType from backend if non-host
@@ -343,9 +348,17 @@ export default function App() {
           return;
         }
 
-        const roomView = await actor.joinRoom(code, pid, name, color);
+        const roomViewResult = await actor.joinRoom(code, pid, name, color);
+        // Candid returns optionals as arrays: [] = null, [value] = some
+        const roomView =
+          Array.isArray(roomViewResult) && roomViewResult.length > 0
+            ? roomViewResult[0]
+            : (roomViewResult ?? null);
+
         if (!roomView) {
-          setJoinError("Room not found or already started.");
+          setJoinError(
+            "Room not found or already started. Check the code and try again.",
+          );
           setIsJoining(false);
           return;
         }
