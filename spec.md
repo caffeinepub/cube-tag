@@ -1,33 +1,33 @@
 # Cube Tag
 
 ## Current State
-Full-stack first-person cube tag game with 3D and 2D platformer modes. The HomeScreen has name input + room create/join flow + a control picker (PC/Mobile). The 3D arena uses MAP_SIZE=22 with corridors, pillars, L-walls, and wonky blocks. The 2D platformer generates a ground floor + 10-16 random floating ledges placed with `posX` from -14 to 14 and `posY` from 1.5 to 10. The scene is rendered via React Three Fiber. Sensitivity is hardcoded at 0.004 for mobile touch-look and is not user-configurable.
+- Fully local/client-side game -- no real multiplayer. Room codes are generated but only exist in each browser tab's memory.
+- Joining with a code creates a brand new local room with 3 bots rather than connecting to an existing room.
+- Backend has only two read-only queries (getRoomState, getAllRooms) with no mutations.
+- Lobby shows "Players (X/4)" hardcoded to 4 slots.
+- 3 AI bots are always added alongside the 1 human player.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Sensitivity slider in the main menu (HomeScreen) — a single labeled slider (range 0.5x to 3x, default 1x) stored in state and passed to GameScreen → Scene so both PC mouse look (PointerLockControls mouse movement multiplier) and mobile touch-drag use it
-- Broader 2D platformer map: wider x-range (-22 to 22), taller height range (1.5 to 14), better ledge spacing using a staggered column-based algorithm so ledges don't pile on top of each other, minimum horizontal gap between adjacent ledges, distinct ledge widths per height tier (wide near ground, narrow high up)
+- Backend mutations: `createRoom`, `joinRoom`, `leaveRoom`, `kickPlayer`, `startGame`, `syncRoomState` so rooms are stored server-side and shared across devices.
+- Real join-by-code: when a player enters an existing room code, they join that room and see the host's lobby.
+- Max 10 real players per room; lobby shows up to 10 human slots.
+- AI slot logic: total slots shown = 4. Human players count toward those 4 slots. Missing slots are filled with AI bots (so 1 human = 3 bots, 2 humans = 2 bots, 3 humans = 1 bot, 4+ humans = 0 bots). Up to 10 real humans can join but only 4 entities play at a time (the rest wait or spectate -- simplest: cap play slots at 10 and let bots fill remaining up to 4 minimum visible entities).
 
 ### Modify
-- `generatePlatformerMap` in mapGen.ts: replace the fully random placement with a structured layout — divide the map into columns (x zones), place 1-2 ledges per column at staggered heights, ensure no two ledges in the same column are within 2 units vertically, expand x range to -22/+22 and y range to 1.5-14
-- `generateMap` (3D arena): expand MAP_SIZE from 22 to 32, increase boundary walls accordingly, add more obstacles (raise corridorCount max to 16, pillarGroupCount max to 8, lWallCount max to 10, wonkyCount max to 14), spread ARENA_LIGHTS and NEON_TUBES to cover the larger area, widen fog far plane from 45 to 65
-- `Scene.tsx`: accept a `sensitivity` prop and apply it as a multiplier to the mobile touch sensitivity constant; for PC, sensitivity is handled via PointerLockControls which uses the browser mouse sensitivity natively — expose a `mouseSensitivity` prop that Scene stores in a ref and uses in a `mousemove` override if needed (or simply pass it through to the PointerLockControls)
-- `HomeScreen.tsx`: add a Settings section on the main screen with a horizontal sensitivity slider (label "Look Sensitivity", values 0.5–3.0, step 0.1, default 1.0), display current value next to label; pass sensitivity up via callback or store in App state
-- `App.tsx`: add `sensitivity` state (default 1.0), pass to HomeScreen (callback), and pass down to GameScreen
-- `GameScreen.tsx`: accept and forward `sensitivity` prop to Scene
-- STAR_POSITIONS_2D: expand to 60 stars to fill the larger map
-- POSTER_POSITIONS_2D: spread posters across new wider range
+- `handleJoinRoom` in App.tsx: query backend for the room code; if found, join it and sync lobby state from backend. If not found, show error rather than creating a new room.
+- `handleCreateRoom` in App.tsx: persist room to backend via `createRoom` mutation.
+- LobbyScreen: poll backend room state every 2 seconds so joining players appear live.
+- Player count display: show `Players (X/10)` for real human slots.
+- Bot count: always fill remaining slots up to 4 total visible players with AI bots.
 
 ### Remove
-- Nothing removed
+- The behaviour where typing any code creates a brand new local-only room.
 
 ## Implementation Plan
-1. Update `mapGen.ts` — `generatePlatformerMap`: structured column-based layout with wider x/y range
-2. Update `mapGen.ts` — `generateMap` (3D): expand MAP_SIZE to 32, raise obstacle counts
-3. Update `Scene.tsx`: accept `sensitivity` prop, apply to mobile touch look, spread lights/tubes/stars for larger 3D map, expand 2D stars and poster positions
-4. Update `HomeScreen.tsx`: add sensitivity slider, emit value via `onSensitivityChange` callback prop
-5. Update `App.tsx`: add `sensitivity` state, wire HomeScreen callback and pass to GameScreen
-6. Update `GameScreen.tsx`: accept and forward `sensitivity` prop to Scene
-7. Update `useGameLoop.ts` (if needed): no changes needed — sensitivity is a rendering/camera concern only
-8. Update fog in `Scene.tsx` 3D mode to match expanded map
+1. Rewrite backend `main.mo` with createRoom, joinRoom, leaveRoom, kickPlayer, updateRoomState, startGame mutations plus improved getRoomState/getAllRooms queries.
+2. Regenerate backend bindings (generate_motoko_code).
+3. Update App.tsx to call backend createRoom on host create, call backend joinRoom on join (error if room not found), poll getRoomState every 2s in lobby.
+4. Update LobbyScreen to show Players (X/10) and dynamically add bots to fill to 4 visible entities.
+5. Validate, build, deploy.

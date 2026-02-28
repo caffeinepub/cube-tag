@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const DECO_CUBES = [
   {
@@ -81,6 +81,8 @@ interface HomeScreenProps {
   ) => void;
   sensitivity?: number;
   onSensitivityChange?: (val: number) => void;
+  joinError?: string;
+  isJoining?: boolean;
 }
 
 export function HomeScreen({
@@ -88,6 +90,8 @@ export function HomeScreen({
   onJoinRoom,
   sensitivity,
   onSensitivityChange,
+  joinError,
+  isJoining,
 }: HomeScreenProps) {
   const [playerName, setPlayerName] = useState("");
   const [joinCode, setJoinCode] = useState("");
@@ -124,6 +128,16 @@ export function HomeScreen({
       onJoinRoom(playerName.trim(), joinCode.trim().toUpperCase(), controlMode);
     }
   };
+
+  // When a backend join error arrives, go back to the join screen so user sees it
+  useEffect(() => {
+    if (joinError && mode === "controls" && pendingAction.current === "join") {
+      setMode("join");
+    }
+  }, [joinError, mode]);
+
+  // Show backend join error when it arrives
+  const displayError = error || joinError || "";
 
   const handleBackFromControls = () => {
     setMode(pendingAction.current === "join" ? "join" : "main");
@@ -219,14 +233,14 @@ export function HomeScreen({
             </div>
           )}
 
-          {error && (
+          {(displayError || joinError) && (
             <motion.p
               className="text-sm"
               style={{ color: "oklch(0.65 0.28 25)" }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              ⚠ {error}
+              ⚠ {displayError || joinError}
             </motion.p>
           )}
 
@@ -309,8 +323,9 @@ export function HomeScreen({
                   color: "oklch(0.1 0.02 140)",
                 }}
                 onClick={handleJoin}
+                disabled={isJoining}
               >
-                🎮 Join Game
+                {isJoining ? "⏳ Joining..." : "🎮 Join Game"}
               </Button>
               <Button
                 variant="ghost"

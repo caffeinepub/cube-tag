@@ -671,9 +671,9 @@ export function GameScreen({
           </div>
         </div>
 
-        {/* Controls reminder - bottom right */}
-        {controlMode === "pc" && (
-          <div className="absolute bottom-5 right-5">
+        {/* Controls reminder + End Game button - bottom right */}
+        <div className="absolute bottom-5 right-5 flex flex-col items-end gap-2 pointer-events-auto">
+          {controlMode === "pc" && (
             <div className="game-panel rounded-lg px-3 py-2 opacity-60">
               {is2D ? (
                 <p className="text-xs text-muted-foreground">
@@ -685,17 +685,38 @@ export function GameScreen({
                 </p>
               )}
             </div>
-          </div>
-        )}
-        {controlMode === "mobile" && (
-          <div className="absolute bottom-5 right-5">
+          )}
+          {controlMode === "mobile" && (
             <div className="game-panel rounded-lg px-3 py-2 opacity-60">
               <p className="text-xs text-muted-foreground">
                 Use on-screen controls
               </p>
             </div>
-          </div>
-        )}
+          )}
+          {/* End Game button */}
+          {gameActive && (
+            <button
+              type="button"
+              className="game-panel rounded-xl px-4 py-2 flex items-center gap-2 font-bold text-sm transition-opacity hover:opacity-100 active:scale-95"
+              style={{
+                border: "1px solid oklch(0.65 0.28 25 / 0.6)",
+                color: "oklch(0.75 0.22 25)",
+                background: "oklch(0.12 0.04 25 / 0.85)",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                setGameActive(false);
+                const finalPlayers = playersRef.current;
+                const winners = finalPlayers
+                  .filter((p) => !p.isIT)
+                  .map((p) => p.id);
+                setTimeout(() => onGameEnd(finalPlayers, winners), 800);
+              }}
+            >
+              🛑 End Game
+            </button>
+          )}
+        </div>
 
         {/* Mobile Controls Overlay */}
         {controlMode === "mobile" && gameActive && (

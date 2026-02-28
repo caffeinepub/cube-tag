@@ -17,20 +17,10 @@ export function useGetAllRooms() {
 
 export function useGetRoomState(roomCode: string) {
   const { actor, isFetching } = useActor();
-  return useQuery<RoomView>({
+  return useQuery<RoomView | null>({
     queryKey: ["roomState", roomCode],
     queryFn: async () => {
-      if (!actor || !roomCode) {
-        return {
-          status: "lobby",
-          mapSeed: BigInt(0),
-          lastActivity: BigInt(0),
-          players: [],
-          timeRemaining: BigInt(100),
-          hostId: "",
-          roomCode,
-        } as RoomView;
-      }
+      if (!actor || !roomCode) return null;
       return actor.getRoomState(roomCode);
     },
     enabled: !!actor && !isFetching && !!roomCode,

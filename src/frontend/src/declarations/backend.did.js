@@ -22,15 +22,39 @@ export const RoomView = IDL.Record({
   'status' : IDL.Text,
   'mapSeed' : IDL.Int,
   'lastActivity' : IDL.Int,
+  'gameDuration' : IDL.Int,
   'players' : IDL.Vec(Player),
+  'selectedMapType' : IDL.Text,
   'timeRemaining' : IDL.Int,
   'hostId' : IDL.Text,
   'roomCode' : IDL.Text,
 });
 
 export const idlService = IDL.Service({
+  'createRoom' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Int, IDL.Int, IDL.Text],
+      [RoomView],
+      [],
+    ),
   'getAllRooms' : IDL.Func([], [IDL.Vec(RoomView)], ['query']),
-  'getRoomState' : IDL.Func([IDL.Text], [RoomView], ['query']),
+  'getRoomState' : IDL.Func([IDL.Text], [IDL.Opt(RoomView)], ['query']),
+  'joinRoom' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Opt(RoomView)],
+      [],
+    ),
+  'kickPlayer' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+  'leaveRoom' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+  'startGame' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
+      [IDL.Bool],
+      [],
+    ),
+  'updateRoomSettings' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
+      [IDL.Bool],
+      [],
+    ),
 });
 
 export const idlInitArgs = [];
@@ -50,15 +74,39 @@ export const idlFactory = ({ IDL }) => {
     'status' : IDL.Text,
     'mapSeed' : IDL.Int,
     'lastActivity' : IDL.Int,
+    'gameDuration' : IDL.Int,
     'players' : IDL.Vec(Player),
+    'selectedMapType' : IDL.Text,
     'timeRemaining' : IDL.Int,
     'hostId' : IDL.Text,
     'roomCode' : IDL.Text,
   });
   
   return IDL.Service({
+    'createRoom' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text, IDL.Int, IDL.Int, IDL.Text],
+        [RoomView],
+        [],
+      ),
     'getAllRooms' : IDL.Func([], [IDL.Vec(RoomView)], ['query']),
-    'getRoomState' : IDL.Func([IDL.Text], [RoomView], ['query']),
+    'getRoomState' : IDL.Func([IDL.Text], [IDL.Opt(RoomView)], ['query']),
+    'joinRoom' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Opt(RoomView)],
+        [],
+      ),
+    'kickPlayer' : IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Bool], []),
+    'leaveRoom' : IDL.Func([IDL.Text, IDL.Text], [IDL.Bool], []),
+    'startGame' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
+    'updateRoomSettings' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
   });
 };
 

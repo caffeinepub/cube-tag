@@ -103,17 +103,40 @@ export interface RoomView {
     status: string;
     mapSeed: bigint;
     lastActivity: bigint;
+    gameDuration: bigint;
     players: Array<Player>;
+    selectedMapType: string;
     timeRemaining: bigint;
     hostId: string;
     roomCode: string;
 }
 export interface backendInterface {
+    createRoom(roomCode: string, hostId: string, hostName: string, hostColor: string, mapSeed: bigint, gameDuration: bigint, selectedMapType: string): Promise<RoomView>;
     getAllRooms(): Promise<Array<RoomView>>;
-    getRoomState(roomCode: string): Promise<RoomView>;
+    getRoomState(roomCode: string): Promise<RoomView | null>;
+    joinRoom(roomCode: string, playerId: string, playerName: string, playerColor: string): Promise<RoomView | null>;
+    kickPlayer(roomCode: string, requesterId: string, targetId: string): Promise<boolean>;
+    leaveRoom(roomCode: string, playerId: string): Promise<boolean>;
+    startGame(roomCode: string, requesterId: string, mapSeed: bigint, mapType: string): Promise<boolean>;
+    updateRoomSettings(roomCode: string, requesterId: string, gameDuration: bigint, selectedMapType: string): Promise<boolean>;
 }
+import type { RoomView as _RoomView } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
+    async createRoom(arg0: string, arg1: string, arg2: string, arg3: string, arg4: bigint, arg5: bigint, arg6: string): Promise<RoomView> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createRoom(arg0, arg1, arg2, arg3, arg4, arg5, arg6);
+            return result;
+        }
+    }
     async getAllRooms(): Promise<Array<RoomView>> {
         if (this.processError) {
             try {
@@ -128,20 +151,93 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async getRoomState(arg0: string): Promise<RoomView> {
+    async getRoomState(arg0: string): Promise<RoomView | null> {
         if (this.processError) {
             try {
                 const result = await this.actor.getRoomState(arg0);
-                return result;
+                return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getRoomState(arg0);
+            return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async joinRoom(arg0: string, arg1: string, arg2: string, arg3: string): Promise<RoomView | null> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.joinRoom(arg0, arg1, arg2, arg3);
+                return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.joinRoom(arg0, arg1, arg2, arg3);
+            return from_candid_opt_n1(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async kickPlayer(arg0: string, arg1: string, arg2: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.kickPlayer(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.kickPlayer(arg0, arg1, arg2);
             return result;
         }
     }
+    async leaveRoom(arg0: string, arg1: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.leaveRoom(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.leaveRoom(arg0, arg1);
+            return result;
+        }
+    }
+    async startGame(arg0: string, arg1: string, arg2: bigint, arg3: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.startGame(arg0, arg1, arg2, arg3);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.startGame(arg0, arg1, arg2, arg3);
+            return result;
+        }
+    }
+    async updateRoomSettings(arg0: string, arg1: string, arg2: bigint, arg3: string): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateRoomSettings(arg0, arg1, arg2, arg3);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateRoomSettings(arg0, arg1, arg2, arg3);
+            return result;
+        }
+    }
+}
+function from_candid_opt_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_RoomView]): RoomView | null {
+    return value.length === 0 ? null : value[0];
 }
 export interface CreateActorOptions {
     agent?: Agent;

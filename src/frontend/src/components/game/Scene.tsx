@@ -839,14 +839,14 @@ export function Scene({
         </mesh>
       ))}
 
-      {/* Ground — dark glossy with grid */}
+      {/* Ground — light gray */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[70, 70]} />
         <meshStandardMaterial
-          color="#080614"
-          roughness={0.1}
-          metalness={0.8}
-          envMapIntensity={0.5}
+          color="#d4d4d4"
+          roughness={0.8}
+          metalness={0.1}
+          envMapIntensity={0.2}
         />
       </mesh>
 
@@ -856,10 +856,10 @@ export function Scene({
         args={[70, 70]}
         cellSize={2}
         cellThickness={0.3}
-        cellColor="#1a0a3a"
+        cellColor="#b0b0b0"
         sectionSize={10}
         sectionThickness={0.6}
-        sectionColor="#3a0a6a"
+        sectionColor="#909090"
         fadeDistance={55}
         fadeStrength={1.5}
         infiniteGrid={false}

@@ -7,6 +7,7 @@ interface LobbyScreenProps {
   isHost: boolean;
   playerName: string;
   players: PlayerState[];
+  humanPlayerCount?: number; // real humans in the room (from backend)
   onStartGame: () => void;
   onLeave: () => void;
   onKickPlayer?: (id: string) => void;
@@ -30,6 +31,7 @@ export function LobbyScreen({
   roomCode,
   isHost,
   players,
+  humanPlayerCount = 1,
   onStartGame,
   onLeave,
   onKickPlayer,
@@ -94,7 +96,8 @@ export function LobbyScreen({
           transition={{ delay: 0.2 }}
         >
           <p className="text-xs tracking-widest uppercase text-muted-foreground mb-4">
-            Players ({players.length}/4)
+            Players ({humanPlayerCount}/10) ·{" "}
+            {players.filter((p) => p.isBot).length} AI
           </p>
           <div className="space-y-2">
             {players.map((player, idx) => (
@@ -269,7 +272,7 @@ export function LobbyScreen({
         >
           {[
             { label: "Time", value: `${gameDuration}s` },
-            { label: "Players", value: `${players.length}` },
+            { label: "Players", value: `${humanPlayerCount}/10` },
             { label: "Map", value: mapLabel },
           ].map((stat) => (
             <div

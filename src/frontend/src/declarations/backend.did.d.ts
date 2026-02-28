@@ -24,14 +24,25 @@ export interface RoomView {
   'status' : string,
   'mapSeed' : bigint,
   'lastActivity' : bigint,
+  'gameDuration' : bigint,
   'players' : Array<Player>,
+  'selectedMapType' : string,
   'timeRemaining' : bigint,
   'hostId' : string,
   'roomCode' : string,
 }
 export interface _SERVICE {
+  'createRoom' : ActorMethod<
+    [string, string, string, string, bigint, bigint, string],
+    RoomView
+  >,
   'getAllRooms' : ActorMethod<[], Array<RoomView>>,
-  'getRoomState' : ActorMethod<[string], RoomView>,
+  'getRoomState' : ActorMethod<[string], [] | [RoomView]>,
+  'joinRoom' : ActorMethod<[string, string, string, string], [] | [RoomView]>,
+  'kickPlayer' : ActorMethod<[string, string, string], boolean>,
+  'leaveRoom' : ActorMethod<[string, string], boolean>,
+  'startGame' : ActorMethod<[string, string, bigint, string], boolean>,
+  'updateRoomSettings' : ActorMethod<[string, string, bigint, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

@@ -21,12 +21,20 @@ export interface RoomView {
     status: string;
     mapSeed: bigint;
     lastActivity: bigint;
+    gameDuration: bigint;
     players: Array<Player>;
+    selectedMapType: string;
     timeRemaining: bigint;
     hostId: string;
     roomCode: string;
 }
 export interface backendInterface {
+    createRoom(roomCode: string, hostId: string, hostName: string, hostColor: string, mapSeed: bigint, gameDuration: bigint, selectedMapType: string): Promise<RoomView>;
     getAllRooms(): Promise<Array<RoomView>>;
-    getRoomState(roomCode: string): Promise<RoomView>;
+    getRoomState(roomCode: string): Promise<RoomView | null>;
+    joinRoom(roomCode: string, playerId: string, playerName: string, playerColor: string): Promise<RoomView | null>;
+    kickPlayer(roomCode: string, requesterId: string, targetId: string): Promise<boolean>;
+    leaveRoom(roomCode: string, playerId: string): Promise<boolean>;
+    startGame(roomCode: string, requesterId: string, mapSeed: bigint, mapType: string): Promise<boolean>;
+    updateRoomSettings(roomCode: string, requesterId: string, gameDuration: bigint, selectedMapType: string): Promise<boolean>;
 }
