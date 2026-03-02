@@ -120,6 +120,13 @@ export interface backendInterface {
     leaveRoom(roomCode: string, playerId: string): Promise<boolean>;
     listOpenRooms(): Promise<Array<RoomView>>;
     startGame(roomCode: string, requesterId: string, mapSeed: bigint, mapType: string): Promise<boolean>;
+    updatePlayerPositions(roomCode: string, updates: Array<{
+        x: number;
+        y: number;
+        z: number;
+        isIT: boolean;
+        playerId: string;
+    }>): Promise<boolean>;
     updateRoomSettings(roomCode: string, requesterId: string, gameDuration: bigint, selectedMapType: string): Promise<boolean>;
 }
 import type { RoomView as _RoomView } from "./declarations/backend.did.d.ts";
@@ -234,6 +241,26 @@ export class Backend implements backendInterface {
             }
         } else {
             const result = await this.actor.startGame(arg0, arg1, arg2, arg3);
+            return result;
+        }
+    }
+    async updatePlayerPositions(arg0: string, arg1: Array<{
+        x: number;
+        y: number;
+        z: number;
+        isIT: boolean;
+        playerId: string;
+    }>): Promise<boolean> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updatePlayerPositions(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updatePlayerPositions(arg0, arg1);
             return result;
         }
     }

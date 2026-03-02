@@ -6,10 +6,10 @@ import Order "mo:core/Order";
 import Bool "mo:core/Bool";
 import Int "mo:core/Int";
 import Float "mo:core/Float";
-import Migration "migration";
+
 
 // Added Migration for data persistence and upgrades
-(with migration = Migration.run)
+
 actor {
   type Player = {
     playerId : Text;
@@ -208,6 +208,42 @@ actor {
           selectedMapType;
         };
         rooms.add(roomCode, updatedRoom);
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func updatePlayerPositions(
+    roomCode : Text,
+    updates : [{
+      playerId : Text;
+      x : Float;
+      y : Float;
+      z : Float;
+      isIT : Bool;
+    }],
+  ) : async Bool {
+    switch (rooms.get(roomCode)) {
+      case (null) { false };
+      case (?room) {
+        if (room.status != "playing") { return false };
+
+        for (update in updates.values()) {
+          switch (room.players.get(update.playerId)) {
+            case (?pl) {
+              let newPlayer : Player = {
+                pl with
+                x = update.x;
+                y = update.y;
+                z = update.z;
+                isIT = update.isIT;
+              };
+              room.players.add(update.playerId, newPlayer);
+            };
+            case (_) {};
+          };
+        };
+        rooms.add(roomCode, room);
         true;
       };
     };

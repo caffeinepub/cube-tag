@@ -44,6 +44,21 @@ export interface _SERVICE {
   'leaveRoom' : ActorMethod<[string, string], boolean>,
   'listOpenRooms' : ActorMethod<[], Array<RoomView>>,
   'startGame' : ActorMethod<[string, string, bigint, string], boolean>,
+  'updatePlayerPositions' : ActorMethod<
+    [
+      string,
+      Array<
+        {
+          'x' : number,
+          'y' : number,
+          'z' : number,
+          'isIT' : boolean,
+          'playerId' : string,
+        }
+      >,
+    ],
+    boolean
+  >,
   'updateRoomSettings' : ActorMethod<[string, string, bigint, string], boolean>,
 }
 export declare const idlService: IDL.ServiceClass;

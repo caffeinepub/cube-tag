@@ -38,5 +38,12 @@ export interface backendInterface {
     leaveRoom(roomCode: string, playerId: string): Promise<boolean>;
     listOpenRooms(): Promise<Array<RoomView>>;
     startGame(roomCode: string, requesterId: string, mapSeed: bigint, mapType: string): Promise<boolean>;
+    updatePlayerPositions(roomCode: string, updates: Array<{
+        x: number;
+        y: number;
+        z: number;
+        isIT: boolean;
+        playerId: string;
+    }>): Promise<boolean>;
     updateRoomSettings(roomCode: string, requesterId: string, gameDuration: bigint, selectedMapType: string): Promise<boolean>;
 }

@@ -636,6 +636,8 @@ export default function App() {
           gameDuration={gameDuration}
           sensitivity={sensitivity}
           graphicsQuality={graphicsQuality}
+          roomCode={roomCode}
+          localPlayerId={localPlayerId}
         />
       )}
       {screen === "end" && (

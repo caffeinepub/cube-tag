@@ -173,6 +173,8 @@ interface GameScreenProps {
   gameDuration?: number;
   sensitivity?: number;
   graphicsQuality?: GraphicsQuality;
+  roomCode?: string;
+  localPlayerId?: string;
 }
 
 export function GameScreen({
@@ -187,6 +189,8 @@ export function GameScreen({
   gameDuration = 100,
   sensitivity = 1,
   graphicsQuality = "medium",
+  roomCode = "",
+  localPlayerId = "",
 }: GameScreenProps) {
   const [players, setPlayers] = useState<PlayerState[]>(initialPlayers);
   const [timeRemaining, setTimeRemaining] = useState(gameDuration);
@@ -197,8 +201,14 @@ export function GameScreen({
     initialPlayers.find((p) => p.isLocal)?.isIT ?? false,
   );
 
-  const { playersRef, keysRef, obstaclesRef, cameraRef, updateFrame } =
-    useGameLoopLogic(mapType);
+  const {
+    playersRef,
+    keysRef,
+    obstaclesRef,
+    cameraRef,
+    remoteTargetsRef,
+    updateFrame,
+  } = useGameLoopLogic(mapType, isHost);
 
   // Initialize refs
   useEffect(() => {
@@ -276,6 +286,121 @@ export function GameScreen({
     }
     prevLocalITRef.current = isLocalIT;
   }, [players]);
+
+  // ── Multiplayer position sync ──────────────────────────────────────────────
+  // Only active when there's a live online room (roomCode is non-empty).
+  // remoteTargetsRef comes from useGameLoopLogic — the game loop reads it every
+  // frame and applies lerp internally, so there is exactly ONE place per frame
+  // that updates player state (no competing setInterval + game-loop writes).
+
+  useEffect(() => {
+    if (!roomCode || !localPlayerId || !gameActive) return;
+
+    let destroyed = false;
+
+    // ── Push: fire-and-forget on a fixed interval (no pileup risk since it's
+    // a one-way write with no await in the hot path)
+    let pushInFlight = false;
+    const pushInterval = setInterval(() => {
+      if (pushInFlight) return; // skip if previous push still in flight
+      const actor = (window as any).backendActor;
+      if (!actor) return;
+      const local = playersRef.current.find((p) => p.isLocal);
+      if (!local) return;
+      pushInFlight = true;
+      actor
+        .updatePlayerPositions(roomCode, [
+          {
+            playerId: localPlayerId,
+            x: local.position.x,
+            y: local.position.y,
+            z: local.position.z,
+            isIT: local.isIT,
+          },
+        ])
+        .catch((err: unknown) => {
+          console.warn("updatePlayerPositions error:", err);
+        })
+        .finally(() => {
+          pushInFlight = false;
+        });
+    }, 50);
+
+    // ── Pull: recursive setTimeout so pulls NEVER pile up —
+    // next pull fires only after the previous one fully resolves.
+    const PULL_INTERVAL_MS = 100;
+    let pullTimer: ReturnType<typeof setTimeout> | null = null;
+
+    async function doPull() {
+      if (destroyed) return;
+      const actor = (window as any).backendActor;
+      if (actor) {
+        try {
+          const roomViewResult = await actor.getRoomState(roomCode);
+          if (destroyed) return;
+          const roomView =
+            Array.isArray(roomViewResult) && roomViewResult.length > 0
+              ? roomViewResult[0]
+              : (roomViewResult ?? null);
+          if (roomView?.players) {
+            for (const entry of roomView.players as Array<{
+              playerId: string;
+              x: number;
+              y: number;
+              z: number;
+              isIT: boolean;
+            }>) {
+              const p = playersRef.current.find(
+                (pl) => pl.id === entry.playerId,
+              );
+              if (!p || p.isLocal || p.isBot) continue;
+
+              // Dead-reckoning velocity estimate
+              const prev = remoteTargetsRef.current[entry.playerId];
+              const now = performance.now();
+              let vx = 0;
+              let vz = 0;
+              if (prev) {
+                const dt = (now - prev.receivedAt) / 1000;
+                if (dt > 0.01 && dt < 2.0) {
+                  vx = (Number(entry.x) - prev.x) / dt;
+                  vz = (Number(entry.z) - prev.z) / dt;
+                }
+                // Exponential moving average to smooth velocity jitter
+                vx = prev.vx * 0.4 + vx * 0.6;
+                vz = prev.vz * 0.4 + vz * 0.6;
+              }
+
+              remoteTargetsRef.current[entry.playerId] = {
+                x: Number(entry.x),
+                y: Number(entry.y),
+                z: Number(entry.z),
+                isIT: entry.isIT,
+                vx,
+                vz,
+                receivedAt: now,
+              };
+            }
+          }
+        } catch (err) {
+          console.warn("getRoomState (sync) error:", err);
+        }
+      }
+      // Schedule next pull only after this one is done
+      if (!destroyed) {
+        pullTimer = setTimeout(doPull, PULL_INTERVAL_MS);
+      }
+    }
+
+    // Kick off the pull loop
+    pullTimer = setTimeout(doPull, PULL_INTERVAL_MS);
+
+    return () => {
+      destroyed = true;
+      clearInterval(pushInterval);
+      if (pullTimer !== null) clearTimeout(pullTimer);
+    };
+  }, [roomCode, localPlayerId, gameActive, playersRef, remoteTargetsRef]);
 
   const localPlayer = players.find((p) => p.isLocal);
   const isLocalIT = localPlayer?.isIT ?? false;

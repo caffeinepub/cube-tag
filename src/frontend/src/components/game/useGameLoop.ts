@@ -139,7 +139,7 @@ function findBestBotDirection(
 
   const { dx: baseDx, dz: baseDz } = normalize(desiredX, desiredZ);
 
-  const NUM_DIRS = 32;
+  const NUM_DIRS = 48;
   const candidates: { dx: number; dz: number; score: number }[] = [];
 
   for (let i = 0; i < NUM_DIRS; i++) {
@@ -206,12 +206,34 @@ function predictTargetPos(target: PlayerState, leadTime: number): Vec3 {
   };
 }
 
-export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
+export function useGameLoopLogic(
+  mapType: "3d" | "2d-platformer" = "3d",
+  // isHost is no longer needed — bots run locally on all clients
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _isHost = true,
+) {
   const playersRef = useRef<PlayerState[]>([]);
   const keysRef = useRef<Set<string>>(new Set());
   const obstaclesRef = useRef<ObstacleBox[]>([]);
   const cameraRef = useRef<{ rotation: { y: number } } | null>(null);
   const mouseDeltaRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // Remote player interpolation targets — populated by the multiplayer sync loop
+  // in GameScreen.tsx, consumed here inside updateFrame for smooth movement.
+  // Includes velocity estimate and timestamp for dead-reckoning extrapolation.
+  const remoteTargetsRef = useRef<
+    Record<
+      string,
+      {
+        x: number;
+        y: number;
+        z: number;
+        isIT: boolean;
+        vx: number; // estimated x velocity (units/sec)
+        vz: number; // estimated z velocity (units/sec)
+        receivedAt: number; // performance.now() when update was received
+      }
+    >
+  >({});
 
   const updateFrame = useCallback(
     (delta: number, onStateUpdate: (players: PlayerState[]) => void) => {
@@ -270,6 +292,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
               onGround = false;
             }
           } else if (isBot) {
+            // All clients run bot AI locally — bots are purely client-side entities
             const itPlayer = players.find((p) => p.isIT);
             if (player.isIT) {
               // 2D chase: pick random target via weighted selection
@@ -335,6 +358,37 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             }
           }
 
+          // Remote human players in 2D mode: dead-reckon to predicted position
+          if (!isLocal && !isBot) {
+            const newImmunity = Math.max(
+              0,
+              (player.tagImmunityTimer ?? 0) - delta,
+            );
+            const target = remoteTargetsRef.current[player.id];
+            if (!target) return { ...player, tagImmunityTimer: newImmunity };
+            // Dead-reckoning: extrapolate where the player probably is right now
+            // based on their last known position + velocity, capped at 0.5s to
+            // prevent wild extrapolation if network goes silent
+            const age = Math.min(
+              0.5,
+              (performance.now() - target.receivedAt) / 1000,
+            );
+            const predictedX = target.x + target.vx * age;
+            const predictedZ = target.z + target.vz * age;
+            // Softer lerp alpha (12 instead of 20) so movement looks smooth
+            const alpha = Math.min(1, delta * 12);
+            return {
+              ...player,
+              position: {
+                x: player.position.x + (predictedX - player.position.x) * alpha,
+                y: player.position.y + (target.y - player.position.y) * alpha,
+                z: player.position.z + (predictedZ - player.position.z) * alpha,
+              },
+              isIT: target.isIT,
+              tagImmunityTimer: newImmunity,
+            };
+          }
+
           const botSpeed = player.isIT ? IT_SPEED_BONUS : BOT_NORMAL_SPEED;
           velY -= GRAVITY * delta;
 
@@ -392,11 +446,24 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         });
 
-        const currentIT = updatedPlayers.find((p) => p.isIT);
+        let currentIT = updatedPlayers.find((p) => p.isIT);
+
+        // Safety fallback: if no one is IT, assign to first bot (or first player)
         if (!currentIT) {
-          playersRef.current = updatedPlayers;
-          onStateUpdate(updatedPlayers);
-          return;
+          const firstBot = updatedPlayers.find((p) => p.isBot);
+          const fallbackIT = firstBot ?? updatedPlayers[0];
+          if (fallbackIT) {
+            const rescued = updatedPlayers.map((p) => ({
+              ...p,
+              isIT: p.id === fallbackIT.id,
+            }));
+            playersRef.current = rescued;
+            onStateUpdate(rescued);
+            currentIT = rescued.find((p) => p.isIT)!;
+            if (!currentIT) return;
+          } else {
+            return;
+          }
         }
 
         let finalPlayers = updatedPlayers;
@@ -484,8 +551,33 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
             0,
             (player.tagImmunityTimer ?? 0) - delta,
           );
-          return { ...player, tagImmunityTimer: newImmunity };
+          const target = remoteTargetsRef.current[player.id];
+          if (!target) return { ...player, tagImmunityTimer: newImmunity };
+          // Dead-reckoning: extrapolate where the player probably is right now
+          // based on their last known position + velocity, capped at 0.5s to
+          // prevent wild extrapolation if network goes silent
+          const age = Math.min(
+            0.5,
+            (performance.now() - target.receivedAt) / 1000,
+          );
+          const predictedX = target.x + target.vx * age;
+          const predictedZ = target.z + target.vz * age;
+          // Softer lerp alpha (12 instead of 20) so movement looks smooth
+          const alpha = Math.min(1, delta * 12);
+          return {
+            ...player,
+            position: {
+              x: player.position.x + (predictedX - player.position.x) * alpha,
+              y: player.position.y + (target.y - player.position.y) * alpha,
+              z: player.position.z + (predictedZ - player.position.z) * alpha,
+            },
+            isIT: target.isIT,
+            tagImmunityTimer: newImmunity,
+          };
         }
+
+        // All clients run bot AI locally — bots are not synced via backend
+        // (backend player map only contains human players)
 
         const speed = player.isIT ? IT_SPEED_BONUS : BOT_NORMAL_SPEED;
         const newImmunity = Math.max(0, (player.tagImmunityTimer ?? 0) - delta);
@@ -501,10 +593,10 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           );
 
           if (chaseable.length === 0) {
-            // All targets immune — wander toward center with a slight random wobble
+            // All targets immune — orbit center with larger radius and smooth motion
             const wanderAngle =
-              Date.now() * 0.0008 + Number(player.id.replace(/\D/g, "")) * 1.3;
-            const wanderRadius = 6;
+              Date.now() * 0.0005 + Number(player.id.replace(/\D/g, "")) * 1.3;
+            const wanderRadius = 12;
             targetPos = {
               x: Math.cos(wanderAngle) * wanderRadius,
               y: 0.5,
@@ -637,9 +729,9 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           };
         }
 
-        if ((botStuckTimers[player.id] ?? 0) > 0.25) {
+        if ((botStuckTimers[player.id] ?? 0) > 0.15) {
           botStuckTimers[player.id] = 0;
-          botRandomDirTimers[player.id] = 1.2;
+          botRandomDirTimers[player.id] = 1.8;
           // Force a new target pick next time
           botTargetTimer[player.id] = 0;
           const angle = Math.random() * Math.PI * 2;
@@ -659,20 +751,55 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
           isChasing,
         );
 
-        const nx = clamp(
+        let nx = clamp(
           player.position.x + bestDir.dx * effectiveSpeed * delta,
           -MAP_BOUND,
           MAP_BOUND,
         );
-        const nz = clamp(
+        let nz = clamp(
           player.position.z + bestDir.dz * effectiveSpeed * delta,
           -MAP_BOUND,
           MAP_BOUND,
         );
-        const { resolvedPos: botResolved } = checkObstacleCollision(
-          { x: nx, y: 0.5, z: nz },
-          obstacles,
-        );
+        let { blocked: mainBlocked, resolvedPos: botResolved } =
+          checkObstacleCollision({ x: nx, y: 0.5, z: nz }, obstacles);
+
+        // Wall-slide: if main direction blocked, try X-only then Z-only as fallback
+        if (mainBlocked) {
+          const nxOnly = clamp(
+            player.position.x + bestDir.dx * effectiveSpeed * delta,
+            -MAP_BOUND,
+            MAP_BOUND,
+          );
+          const { blocked: xBlocked, resolvedPos: xResolved } =
+            checkObstacleCollision(
+              { x: nxOnly, y: 0.5, z: player.position.z },
+              obstacles,
+            );
+          if (!xBlocked) {
+            botResolved = xResolved;
+            mainBlocked = false;
+          } else {
+            const nzOnly = clamp(
+              player.position.z + bestDir.dz * effectiveSpeed * delta,
+              -MAP_BOUND,
+              MAP_BOUND,
+            );
+            const { blocked: zBlocked, resolvedPos: zResolved } =
+              checkObstacleCollision(
+                { x: player.position.x, y: 0.5, z: nzOnly },
+                obstacles,
+              );
+            if (!zBlocked) {
+              botResolved = zResolved;
+              mainBlocked = false;
+            }
+          }
+        }
+
+        // Suppress unused variable warning — mainBlocked used above for fallback logic
+        void mainBlocked;
+
         botResolved.y = 0.5;
 
         return {
@@ -683,11 +810,24 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
       });
 
       // ── Tag detection ─────────────────────────────────────────────────────
-      const currentIT = updatedPlayers.find((p) => p.isIT);
+      let currentIT = updatedPlayers.find((p) => p.isIT);
+
+      // Safety fallback: if somehow no one is IT, assign IT to the first bot (or first player)
       if (!currentIT) {
-        playersRef.current = updatedPlayers;
-        onStateUpdate(updatedPlayers);
-        return;
+        const firstBot = updatedPlayers.find((p) => p.isBot);
+        const fallbackIT = firstBot ?? updatedPlayers[0];
+        if (fallbackIT) {
+          const rescued = updatedPlayers.map((p) => ({
+            ...p,
+            isIT: p.id === fallbackIT.id,
+          }));
+          playersRef.current = rescued;
+          onStateUpdate(rescued);
+          currentIT = rescued.find((p) => p.isIT)!;
+          if (!currentIT) return;
+        } else {
+          return;
+        }
       }
 
       let finalPlayers = updatedPlayers;
@@ -731,6 +871,7 @@ export function useGameLoopLogic(mapType: "3d" | "2d-platformer" = "3d") {
     obstaclesRef,
     cameraRef,
     mouseDeltaRef,
+    remoteTargetsRef,
     updateFrame,
   };
 }

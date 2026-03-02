@@ -61,6 +61,22 @@ export const idlService = IDL.Service({
       [IDL.Bool],
       [],
     ),
+  'updatePlayerPositions' : IDL.Func(
+      [
+        IDL.Text,
+        IDL.Vec(
+          IDL.Record({
+            'x' : IDL.Float64,
+            'y' : IDL.Float64,
+            'z' : IDL.Float64,
+            'isIT' : IDL.Bool,
+            'playerId' : IDL.Text,
+          })
+        ),
+      ],
+      [IDL.Bool],
+      [],
+    ),
   'updateRoomSettings' : IDL.Func(
       [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
       [IDL.Bool],
@@ -121,6 +137,22 @@ export const idlFactory = ({ IDL }) => {
     'listOpenRooms' : IDL.Func([], [IDL.Vec(RoomView)], ['query']),
     'startGame' : IDL.Func(
         [IDL.Text, IDL.Text, IDL.Int, IDL.Text],
+        [IDL.Bool],
+        [],
+      ),
+    'updatePlayerPositions' : IDL.Func(
+        [
+          IDL.Text,
+          IDL.Vec(
+            IDL.Record({
+              'x' : IDL.Float64,
+              'y' : IDL.Float64,
+              'z' : IDL.Float64,
+              'isIT' : IDL.Bool,
+              'playerId' : IDL.Text,
+            })
+          ),
+        ],
         [IDL.Bool],
         [],
       ),
